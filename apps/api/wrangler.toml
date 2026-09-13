@@ -1,0 +1,25 @@
+name = "prometheus-api"
+main = "src/index.ts"
+compatibility_date = "2026-09-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Static vars (non-secret). Secrets go via `wrangler secret put`.
+[vars]
+# Comma-separated Gmail addresses allowed to sign in. Edit and redeploy to change.
+# Origins allowed to call this API (comma-separated, no trailing slash).
+ALLOWED_ORIGINS = "https://rafsunsheikh.github.io,http://localhost:5173"
+# Google OAuth Web client ID (public value — safe to commit).
+GOOGLE_CLIENT_ID = ""
+
+[[d1_databases]]
+binding = "DB"
+database_name = "prometheus-db"
+database_id = "REPLACE_WITH_D1_DATABASE_ID"
+migrations_dir = "migrations"
+
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "prometheus-library"
+
+[observability]
+enabled = true

@@ -1,0 +1,23 @@
+{
+  "name": "@prometheus/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "deploy": "wrangler deploy",
+    "db:migrate:local": "wrangler d1 migrations apply prometheus-db --local",
+    "db:migrate:remote": "wrangler d1 migrations apply prometheus-db --remote"
+  },
+  "dependencies": {
+    "hono": "^4.13.7",
+    "jose": "^6.2.12"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260911.1",
+    "typescript": "^7.0.2",
+    "wrangler": "^4.131.1"
+  }
+}

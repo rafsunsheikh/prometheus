@@ -1,0 +1,32 @@
+# Keep the Socrates runner alive on a Linux home server (systemd).
+#
+# Install:
+#   sed "s|__REPO__|/srv/prometheus|g; s|__USER__|$USER|g" \
+#     apps/runner/prometheus-runner.service.example \
+#     | sudo tee /etc/systemd/system/prometheus-runner.service
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now prometheus-runner
+#
+# Logs:  journalctl -u prometheus-runner -f
+#
+# Note: Claude Code must already be signed in AS THIS USER
+# (run `claude` once interactively and complete the login) — the runner
+# reuses those stored credentials.
+
+[Unit]
+Description=Prometheus Socrates runner
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=__USER__
+WorkingDirectory=__REPO__/apps/runner
+ExecStart=/usr/bin/env npx tsx src/index.ts
+Restart=always
+RestartSec=15
+# Summarizing a long book is a long-running child process; give it room.
+TimeoutStopSec=300
+
+[Install]
+WantedBy=multi-user.target

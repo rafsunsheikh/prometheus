@@ -1,0 +1,25 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Typecheck all workspaces
+        run: npm run typecheck
+      - name: Build web
+        working-directory: apps/web
+        env:
+          VITE_API_URL: https://example.invalid
+          VITE_GOOGLE_CLIENT_ID: ci-placeholder
+        run: npm run build

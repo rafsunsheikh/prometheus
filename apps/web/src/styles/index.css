@@ -1,0 +1,178 @@
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-serif: 'Fraunces', ui-serif, Georgia, serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  /* Ink — the near-black the whole app sits on. */
+  --color-ink-950: #07090d;
+  --color-ink-900: #0b0d12;
+  --color-ink-850: #0f1218;
+  --color-ink-800: #151922;
+  --color-ink-700: #1d222d;
+  --color-ink-600: #2a3140;
+  --color-ink-500: #3d4557;
+
+  /* Ember — Prometheus's stolen fire. */
+  --color-ember-300: #fcd9a4;
+  --color-ember-400: #f7b955;
+  --color-ember-500: #ed8f2e;
+  --color-ember-600: #d96b18;
+
+  /* Sage — Socrates. Used only where the feature speaks for itself. */
+  --color-sage-300: #a7dcc4;
+  --color-sage-400: #6ec59d;
+  --color-sage-500: #3da97c;
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+    scroll-behavior: smooth;
+  }
+  body {
+    @apply bg-ink-900 text-slate-200 antialiased;
+    background-image:
+      radial-gradient(900px 500px at 12% -8%, rgba(237, 143, 46, 0.09), transparent 60%),
+      radial-gradient(760px 460px at 92% 4%, rgba(61, 169, 124, 0.07), transparent 62%);
+    background-attachment: fixed;
+  }
+  ::selection {
+    @apply bg-ember-500/30 text-white;
+  }
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply rounded-full bg-ink-600;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-ink-500;
+  }
+}
+
+@layer components {
+  .panel {
+    @apply rounded-2xl border border-white/8 bg-ink-850/70 backdrop-blur-xl;
+  }
+  /* Tailwind v4's @apply only takes utilities, never another custom class —
+     so the shared button base is a selector list rather than a .btn mixin. */
+  .btn,
+  .btn-primary,
+  .btn-ghost,
+  .btn-quiet {
+    @apply inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl px-4 py-2.5
+           text-sm font-semibold transition-all duration-150 select-none
+           disabled:cursor-not-allowed disabled:opacity-45;
+  }
+  .btn-primary {
+    @apply bg-ember-500 text-ink-950 hover:bg-ember-400
+           active:scale-[0.98] disabled:hover:bg-ember-500;
+  }
+  .btn-ghost {
+    @apply border border-white/10 bg-white/4 text-slate-200
+           hover:border-white/20 hover:bg-white/8 active:scale-[0.98];
+  }
+  .btn-quiet {
+    @apply text-slate-400 hover:bg-white/6 hover:text-slate-100;
+  }
+  .chip {
+    @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-1
+           text-[11px] font-semibold tracking-wide uppercase;
+  }
+  .field {
+    @apply w-full rounded-xl border border-white/10 bg-ink-900/60 px-3.5 py-2.5 text-sm
+           text-slate-100 placeholder:text-slate-500
+           focus:border-ember-500/60 focus:ring-2 focus:ring-ember-500/20 focus:outline-none;
+  }
+}
+
+/* Rendered markdown — reading is the point of this app, so it gets real
+   typography rather than whatever the prose plugin defaults to. */
+.doc {
+  @apply text-[15.5px] leading-[1.75] text-slate-300;
+}
+.doc h1 {
+  @apply mt-0 mb-3 font-serif text-[2.1rem] leading-tight font-semibold text-white;
+}
+.doc h2 {
+  @apply mt-11 mb-4 border-b border-white/8 pb-2.5 font-serif text-[1.5rem]
+         leading-snug font-semibold text-white;
+}
+.doc h3 {
+  @apply mt-8 mb-2.5 text-[1.08rem] font-semibold text-ember-300;
+}
+.doc h4 {
+  @apply mt-6 mb-2 text-[0.95rem] font-semibold text-slate-100;
+}
+.doc p {
+  @apply my-4;
+}
+.doc ul {
+  @apply my-4 list-disc space-y-2 pl-5 marker:text-ember-500/70;
+}
+.doc ol {
+  @apply my-4 list-decimal space-y-2 pl-5 marker:text-ember-500/70;
+}
+.doc li > p {
+  @apply my-1;
+}
+.doc blockquote {
+  @apply my-6 rounded-r-lg border-l-[3px] border-ember-500/60 bg-white/3 py-3 pr-4 pl-5
+         font-serif text-[1.02rem] text-slate-300 italic;
+}
+.doc blockquote p {
+  @apply my-2;
+}
+.doc strong {
+  @apply font-semibold text-slate-100;
+}
+.doc em {
+  @apply text-slate-400 italic;
+}
+.doc a {
+  @apply text-ember-400 underline decoration-ember-500/40 underline-offset-2 hover:decoration-ember-400;
+}
+.doc code {
+  @apply rounded bg-white/8 px-1.5 py-0.5 font-mono text-[0.86em] text-ember-300;
+}
+.doc pre {
+  @apply my-5 overflow-x-auto rounded-xl border border-white/8 bg-ink-950 p-4;
+}
+.doc pre code {
+  @apply bg-transparent p-0 text-slate-300;
+}
+.doc hr {
+  @apply my-9 border-white/8;
+}
+.doc table {
+  @apply my-5 w-full border-collapse text-sm;
+}
+.doc th {
+  @apply border-b border-white/12 px-3 py-2 text-left font-semibold text-slate-100;
+}
+.doc td {
+  @apply border-b border-white/6 px-3 py-2;
+}
+.doc > :first-child {
+  @apply mt-0;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.rise {
+  animation: rise 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}

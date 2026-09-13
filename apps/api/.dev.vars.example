@@ -1,0 +1,12 @@
+# Copy to apps/api/.dev.vars for local `wrangler dev`. Never commit .dev.vars.
+# Signing key for Prometheus session tokens. Generate with:
+#   openssl rand -base64 48
+SESSION_SECRET="change-me-to-a-long-random-string"
+
+# Shared secret the runner daemon uses to claim jobs. Generate with:
+#   openssl rand -hex 32
+RUNNER_TOKEN="change-me-too"
+
+# Local dev only: Vite falls back to another port when 5173 is taken, so accept
+# any localhost port here. Production origins are the exact ones in wrangler.toml.
+ALLOWED_ORIGINS="http://localhost:*,http://127.0.0.1:*"

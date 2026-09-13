@@ -1,0 +1,19 @@
+{
+  "name": "@prometheus/runner",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": { "prometheus-runner": "./dist/index.js" },
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "once": "tsx src/index.ts --once",
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^26.5.1",
+    "tsx": "^4.23.13",
+    "typescript": "^7.0.2"
+  }
+}

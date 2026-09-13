@@ -1,0 +1,22 @@
+node_modules/
+dist/
+.DS_Store
+*.log
+
+# Env / secrets — never commit
+.env
+.env.*
+!.env.example
+.dev.vars
+apps/runner/.runner-state.json
+
+# Cloudflare
+.wrangler/
+apps/api/.wrangler/
+
+# Build artifacts
+apps/web/dist/
+apps/runner/dist/
+
+# TS incremental build cache
+*.tsbuildinfo

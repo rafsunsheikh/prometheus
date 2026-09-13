@@ -1,0 +1,19 @@
+{
+  "name": "prometheus",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Prometheus — a private suite of AI tools. First feature: Socrates, a book summarizer.",
+  "type": "module",
+  "workspaces": ["apps/web", "apps/api", "apps/runner"],
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "dev:web": "npm run dev -w @prometheus/web",
+    "dev:api": "npm run dev -w @prometheus/api",
+    "dev:runner": "npm run dev -w @prometheus/runner",
+    "build": "npm run build -w @prometheus/api && npm run build -w @prometheus/web",
+    "build:web": "npm run build -w @prometheus/web",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "db:migrate:local": "npm run db:migrate:local -w @prometheus/api",
+    "db:migrate:remote": "npm run db:migrate:remote -w @prometheus/api"
+  }
+}

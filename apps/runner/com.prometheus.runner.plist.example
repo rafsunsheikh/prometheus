@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Keep the Socrates runner alive on macOS.
+
+  Install:
+    sed "s|__REPO__|$PWD|g" apps/runner/com.prometheus.runner.plist.example \
+      > ~/Library/LaunchAgents/com.prometheus.runner.plist
+    launchctl load ~/Library/LaunchAgents/com.prometheus.runner.plist
+
+  Stop:
+    launchctl unload ~/Library/LaunchAgents/com.prometheus.runner.plist
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.prometheus.runner</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/zsh</string>
+    <string>-lc</string>
+    <string>cd __REPO__/apps/runner &amp;&amp; exec npx tsx src/index.ts</string>
+  </array>
+
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+
+  <key>StandardOutPath</key>
+  <string>__REPO__/apps/runner/runner.log</string>
+  <key>StandardErrorPath</key>
+  <string>__REPO__/apps/runner/runner.error.log</string>
+</dict>
+</plist>
