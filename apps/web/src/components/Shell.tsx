@@ -28,6 +28,17 @@ export function Shell({ children }: { children: ReactNode }) {
             Socrates
           </Link>
 
+          {user?.isAdmin && (
+            <Link
+              to="/admin"
+              className={`hidden rounded-lg px-3 py-1.5 text-sm font-medium transition-colors sm:block ${
+                onAdmin ? 'bg-white/8 text-white' : 'text-slate-400 hover:text-slate-100'
+              }`}
+            >
+              Admin
+            </Link>
+          )}
+
           <div className="flex-1" />
 
           {user && (
