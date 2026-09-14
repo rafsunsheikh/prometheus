@@ -40,24 +40,74 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * localStorage is not always available — Safari private windows and some
+ * tracking-prevention settings make it throw on read or write. Losing the
+ * "stay signed in" convenience is acceptable; failing the sign-in is not, so
+ * fall back to memory and keep going.
+ */
+let memoryToken: string | null = null;
+
 export const tokenStore = {
-  get: () => localStorage.getItem(TOKEN_KEY),
-  set: (t: string) => localStorage.setItem(TOKEN_KEY, t),
-  clear: () => localStorage.removeItem(TOKEN_KEY),
+  get: (): string | null => {
+    try {
+      return localStorage.getItem(TOKEN_KEY) ?? memoryToken;
+    } catch {
+      return memoryToken;
+    }
+  },
+  set: (t: string) => {
+    memoryToken = t;
+    try {
+      localStorage.setItem(TOKEN_KEY, t);
+    } catch {
+      console.warn('[prometheus] Browser storage is unavailable; staying signed in for this tab only.');
+    }
+  },
+  clear: () => {
+    memoryToken = null;
+    try {
+      localStorage.removeItem(TOKEN_KEY);
+    } catch {
+      /* nothing to clear */
+    }
+  },
 };
+
+/** No request may hang forever — a silent stall is the worst failure to debug. */
+const REQUEST_TIMEOUT_MS = 25_000;
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const token = tokenStore.get();
-  const res = await fetch(`${BASE}${path}`, {
-    ...init,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(init?.headers ?? {}),
-    },
-  });
+  const abort = new AbortController();
+  const timer = setTimeout(() => abort.abort(), REQUEST_TIMEOUT_MS);
 
-  const text = await res.text();
+  let res: Response;
+  let text: string;
+  try {
+    res = await fetch(`${BASE}${path}`, {
+      ...init,
+      signal: abort.signal,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(init?.headers ?? {}),
+      },
+    });
+    text = await res.text();
+  } catch (err) {
+    // Turn a stall or a blocked request into something readable, rather than
+    // a promise that never settles and a spinner that never stops.
+    const aborted = err instanceof DOMException && err.name === 'AbortError';
+    const message = aborted
+      ? `The API did not respond within ${REQUEST_TIMEOUT_MS / 1000}s (${BASE}).`
+      : `Could not reach the API at ${BASE}. Check your connection, or whether a content blocker is blocking it.`;
+    console.error('[prometheus]', path, err);
+    throw new ApiError(message, 0);
+  } finally {
+    clearTimeout(timer);
+  }
+
   let payload: unknown = null;
   try {
     payload = text ? JSON.parse(text) : null;

@@ -25,10 +25,19 @@ export function Login() {
         client_id: GOOGLE_CLIENT_ID,
         cancel_on_tap_outside: false,
         callback: ({ credential }) => {
+          if (!credential) {
+            setError('Google returned no credential. Try again, or use a different browser.');
+            return;
+          }
           setBusy(true);
           setError(null);
+          console.info('[prometheus] Google returned a credential; verifying with the API…');
           signIn(credential)
-            .catch((err: Error) => setError(err.message))
+            .then(() => console.info('[prometheus] Signed in.'))
+            .catch((err: Error) => {
+              console.error('[prometheus] Sign-in failed:', err);
+              setError(err.message);
+            })
             .finally(() => setBusy(false));
         },
       });
