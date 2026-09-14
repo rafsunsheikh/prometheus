@@ -12,10 +12,29 @@ export interface User {
   isAdmin?: boolean;
 }
 
+export interface Question {
+  id: string;
+  question: string;
+  answer: string | null;
+  sections: string[];
+  status: 'queued' | 'running' | 'done' | 'failed';
+  error: string | null;
+  createdAt: number;
+  answeredAt: number | null;
+}
+
+/** What the runner is busy with, so a wait can be explained rather than mimed. */
+export interface WaitingFor {
+  title: string;
+  stage: string | null;
+  done: number;
+  total: number;
+}
+
 export interface AdminStats {
   totals: {
     books: number; summarized: number; words: number; chars: number; pages: number;
-    inputTokens: number; outputTokens: number; tokens: number; costUsd: number;
+    inputTokens: number; outputTokens: number; tokens: number; questionsAsked: number; costUsd: number;
     seconds: number; measured: number; unmeasured: number;
   };
   wordsPerPage: number;
@@ -179,6 +198,17 @@ export const api = {
     request<{ jobId: string; alreadyRunning: boolean }>(`/api/books/${id}/summarize`, {
       method: 'POST',
     }),
+
+  ask: (bookId: string, question: string) =>
+    request<{ questionId: string }>(`/api/books/${bookId}/ask`, {
+      method: 'POST',
+      body: JSON.stringify({ question }),
+    }),
+
+  listQuestions: (bookId: string) =>
+    request<{ questions: Question[]; waitingFor: WaitingFor | null }>(
+      `/api/books/${bookId}/questions`,
+    ),
 
   adminStats: () => request<AdminStats>('/api/admin/stats'),
 

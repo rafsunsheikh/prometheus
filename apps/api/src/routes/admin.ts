@@ -59,6 +59,16 @@ app.get('/stats', async (c) => {
      FROM summaries s`,
   ).first<Totals>();
 
+  // Questions cost real tokens too; a usage view that ignored them would
+  // understate what the subscription is actually spending.
+  const qs = await c.env.DB.prepare(
+    `SELECT COUNT(*) AS asked,
+            COALESCE(SUM(input_tokens),0)  AS input_tokens,
+            COALESCE(SUM(output_tokens),0) AS output_tokens,
+            COALESCE(SUM(cost_usd),0)      AS cost_usd
+       FROM questions WHERE status = 'done'`,
+  ).first<{ asked: number; input_tokens: number; output_tokens: number; cost_usd: number }>();
+
   const jobs = await c.env.DB.prepare(
     `SELECT status, COUNT(*) AS n FROM jobs GROUP BY status`,
   ).all<{ status: string; n: number }>();
@@ -85,7 +95,10 @@ app.get('/stats', async (c) => {
   ).all();
 
   const t = totals ?? ({} as Totals);
-  const tokens = (t.input_tokens ?? 0) + (t.output_tokens ?? 0);
+  const q = qs ?? { asked: 0, input_tokens: 0, output_tokens: 0, cost_usd: 0 };
+  const inputTokens = (t.input_tokens ?? 0) + q.input_tokens;
+  const outputTokens = (t.output_tokens ?? 0) + q.output_tokens;
+  const tokens = inputTokens + outputTokens;
 
   return c.json({
     totals: {
@@ -94,10 +107,11 @@ app.get('/stats', async (c) => {
       words: t.words ?? 0,
       chars: t.chars ?? 0,
       pages: Math.round((t.words ?? 0) / WORDS_PER_PAGE),
-      inputTokens: t.input_tokens ?? 0,
-      outputTokens: t.output_tokens ?? 0,
+      inputTokens,
+      outputTokens,
       tokens,
-      costUsd: t.cost_usd ?? 0,
+      questionsAsked: q.asked,
+      costUsd: (t.cost_usd ?? 0) + q.cost_usd,
       seconds: t.seconds ?? 0,
       // How many summaries carry real token data. Anything summarized before
       // usage was recorded reports zero, and saying so beats a total that

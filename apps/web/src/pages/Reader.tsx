@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
+  MessageCircleQuestion,
   Check,
   ChevronDown,
   Copy,
@@ -13,6 +14,7 @@ import {
 import { api, type Book } from '../lib/api';
 import { renderMarkdown } from '../lib/markdown';
 import { exportDocx, exportMarkdown, exportPdf } from '../lib/export';
+import { Ask } from '../components/Ask';
 import {
   ErrorNote,
   ProgressBar,
@@ -23,7 +25,7 @@ import {
   readingTime,
 } from '../components/Bits';
 
-type Tab = 'summary' | 'text';
+type Tab = 'summary' | 'text' | 'ask';
 
 export function Reader() {
   const { id = '' } = useParams();
@@ -100,7 +102,7 @@ export function Reader() {
   }, [id, refresh]);
 
   const active = book?.job?.status === 'queued' || book?.job?.status === 'running';
-  const body = tab === 'summary' ? summary : content;
+  const body = tab === 'summary' ? summary : tab === 'text' ? content : null;
   const html = useMemo(() => (body ? renderMarkdown(body) : ''), [body]);
 
   if (!book && !error) return <Spinner label="Opening…" />;
@@ -193,8 +195,19 @@ export function Reader() {
               <FileText className="h-3.5 w-3.5" />
               Full text
             </TabButton>
+            <TabButton active={tab === 'ask'} onClick={() => setTab('ask')}>
+              <MessageCircleQuestion className="h-3.5 w-3.5" />
+              Ask
+            </TabButton>
           </div>
 
+          {tab === 'ask' && (
+            <div className="rise">
+              <Ask bookId={book.id} hasSummary={book.hasSummary} />
+            </div>
+          )}
+
+          {tab !== 'ask' && (
           <article className="panel rise px-6 py-8 sm:px-10 sm:py-10">
             {tab === 'summary' && !summary && (
               <div className="grid place-items-center py-16 text-center">
@@ -217,6 +230,7 @@ export function Reader() {
               />
             )}
           </article>
+          )}
         </>
       )}
     </div>

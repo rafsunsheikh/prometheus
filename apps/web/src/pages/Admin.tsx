@@ -82,7 +82,10 @@ export function Admin() {
           icon={<BookOpen className="h-3.5 w-3.5" />}
           label="Books summarized"
           value={String(t.summarized)}
-          sub={t.books !== t.summarized ? `${t.books} uploaded in total` : 'all uploads summarized'}
+          sub={
+            `${t.books !== t.summarized ? `${t.books} uploaded in total` : 'all uploads summarized'}` +
+            (t.questionsAsked ? ` · ${t.questionsAsked} question${t.questionsAsked === 1 ? '' : 's'} answered` : '')
+          }
         />
         <Stat
           icon={<FileText className="h-3.5 w-3.5" />}

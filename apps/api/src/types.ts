@@ -77,3 +77,24 @@ export interface RunUsage {
   chunks: number;
   durationMs: number;
 }
+
+export type QuestionStatus = 'queued' | 'running' | 'done' | 'failed';
+
+export interface QuestionRow {
+  id: string;
+  book_id: string;
+  owner_email: string;
+  question: string;
+  answer: string | null;
+  sections: string | null;
+  status: QuestionStatus;
+  error: string | null;
+  attempts: number;
+  input_tokens: number;
+  output_tokens: number;
+  cost_usd: number;
+  model: string | null;
+  created_at: number;
+  claimed_at: number | null;
+  answered_at: number | null;
+}

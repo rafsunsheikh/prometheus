@@ -1,6 +1,7 @@
 import { api } from './api.js';
 import { assertClaudeInstalled, config } from './config.js';
 import { summarizeBook } from './summarize.js';
+import { answerQuestion } from './ask.js';
 
 const once = process.argv.includes('--once');
 let stopping = false;
@@ -53,6 +54,48 @@ async function handleOneJob(): Promise<boolean> {
   return true;
 }
 
+/**
+ * Answer one pending question, if there is one.
+ *
+ * Questions are taken before summarization jobs so a reader is not stuck behind
+ * books that have not started. A book already running still finishes first —
+ * this runner makes one Claude call at a time, deliberately.
+ */
+async function handleOneQuestion(): Promise<boolean> {
+  const q = await api.claimQuestion();
+  if (!q) return false;
+
+  log(`Question on "${q.title}" (attempt ${q.attempt}): ${q.question.slice(0, 80)}`);
+  const startedAt = Date.now();
+
+  try {
+    const result = await answerQuestion({
+      title: q.title,
+      author: q.author,
+      question: q.question,
+      markdown: q.markdown,
+      summary: q.summary,
+      history: q.history,
+    });
+    await api.answerQuestion(q.id, result.answer, result.sections, result.model, {
+      inputTokens: result.inputTokens,
+      outputTokens: result.outputTokens,
+      costUsd: result.costUsd,
+    });
+    const secs = ((Date.now() - startedAt) / 1000).toFixed(0);
+    log(
+      `  answered in ${secs}s from ${result.passages} passage(s), ` +
+        `${(result.inputTokens + result.outputTokens).toLocaleString()} tokens, ` +
+        `~$${result.costUsd.toFixed(2)}`,
+    );
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    log(`  FAILED: ${message}`);
+    await api.failQuestion(q.id, message, true).catch(() => {});
+  }
+  return true;
+}
+
 async function main(): Promise<void> {
   assertClaudeInstalled();
 
@@ -70,7 +113,7 @@ async function main(): Promise<void> {
   }
 
   if (once) {
-    const worked = await handleOneJob();
+    const worked = (await handleOneQuestion()) || (await handleOneJob());
     log(worked ? 'Processed one job, exiting (--once)' : 'Queue empty, exiting (--once)');
     return;
   }
@@ -80,13 +123,13 @@ async function main(): Promise<void> {
 
   while (!stopping) {
     try {
-      const worked = await handleOneJob();
+      const worked = (await handleOneQuestion()) || (await handleOneJob());
       if (worked) {
         idleLogged = false;
         continue; // Drain the queue before sleeping again.
       }
       if (!idleLogged) {
-        log('Queue empty, waiting for work');
+        log('Nothing queued, waiting for work');
         idleLogged = true;
       }
     } catch (err) {

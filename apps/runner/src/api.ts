@@ -56,7 +56,41 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
   );
 }
 
+export interface ClaimedQuestion {
+  id: string;
+  bookId: string;
+  title: string;
+  author: string | null;
+  question: string;
+  attempt: number;
+  markdown: string;
+  summary: string | null;
+  history: { question: string; answer: string }[];
+}
+
 export const api = {
+  claimQuestion: () =>
+    call<{ question: ClaimedQuestion | null }>('/api/runner/ask/claim', { method: 'POST' })
+      .then((r) => r.question),
+
+  answerQuestion: (
+    id: string,
+    answer: string,
+    sections: string[],
+    model: string,
+    usage: { inputTokens: number; outputTokens: number; costUsd: number },
+  ) =>
+    call(`/api/runner/ask/${id}/complete`, {
+      method: 'POST',
+      body: JSON.stringify({ answer, sections, model, usage }),
+    }),
+
+  failQuestion: (id: string, error: string, retry: boolean) =>
+    call<{ requeued: boolean }>(`/api/runner/ask/${id}/fail`, {
+      method: 'POST',
+      body: JSON.stringify({ error, retry }),
+    }),
+
   claim: () =>
     call<{ job: ClaimedJob | null }>('/api/runner/claim', { method: 'POST' }).then((r) => r.job),
 

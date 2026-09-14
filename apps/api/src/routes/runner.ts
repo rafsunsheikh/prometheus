@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { requireRunner } from '../lib/middleware';
 import { countWords, getText, newId, putText, readJson, summaryKey } from '../lib/storage';
-import type { BookRow, Env, JobRow, RunUsage, Variables } from '../types';
+import type { BookRow, Env, JobRow, QuestionRow, RunUsage, Variables } from '../types';
 
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
 app.use('*', requireRunner);
@@ -88,6 +88,123 @@ app.post('/claim', async (c) => {
  * this, a long book gets requeued mid-run and a second runner starts summarizing
  * the same book in parallel — both finish, both write, double the usage spent.
  */
+/**
+ * Claim one pending question.
+ *
+ * Questions are claimed BEFORE summarization jobs, so a reader waiting on an
+ * answer is not stuck behind books that have not started yet. A book already
+ * running still finishes first — the runner makes one Claude call at a time.
+ */
+app.post('/ask/claim', async (c) => {
+  const now = Date.now();
+
+  // Recycle questions whose runner died mid-answer.
+  await c.env.DB.prepare(
+    `UPDATE questions SET status='queued' WHERE status='running' AND claimed_at < ?1 AND attempts < ?2`,
+  ).bind(now - STALE_MS, MAX_ATTEMPTS).run();
+  await c.env.DB.prepare(
+    `UPDATE questions SET status='failed', error='Gave up after repeated stalled runs', answered_at=?1
+      WHERE status='running' AND claimed_at < ?2 AND attempts >= ?3`,
+  ).bind(now, now - STALE_MS, MAX_ATTEMPTS).run();
+
+  const q = await c.env.DB.prepare(
+    `SELECT * FROM questions WHERE status='queued' ORDER BY created_at ASC LIMIT 1`,
+  ).first<QuestionRow>();
+  if (!q) return c.json({ question: null });
+
+  const claim = await c.env.DB.prepare(
+    `UPDATE questions SET status='running', claimed_at=?1, attempts=attempts+1, error=NULL
+      WHERE id=?2 AND status='queued'`,
+  ).bind(now, q.id).run();
+  if (!claim.meta.changes) return c.json({ question: null });
+
+  const book = await c.env.DB.prepare('SELECT * FROM books WHERE id = ?1')
+    .bind(q.book_id)
+    .first<BookRow>();
+  const markdown = book ? await getText(c.env, book.content_key) : null;
+  if (!book || markdown === null) {
+    await c.env.DB.prepare(
+      `UPDATE questions SET status='failed', error='Book text is missing from storage', answered_at=?1 WHERE id=?2`,
+    ).bind(now, q.id).run();
+    return c.json({ question: null });
+  }
+
+  // The summary is short and already paid for. Sending it alongside the
+  // retrieved passages gives the model the book's own vocabulary and shape,
+  // which keyword retrieval alone misses when a question is worded differently.
+  const summary = await getText(c.env, summaryKey(book.id)).catch(() => null);
+
+  // Recent turns only: enough for "what about that?" to resolve, not so much
+  // that the conversation crowds out the passages.
+  const { results: history } = await c.env.DB.prepare(
+    `SELECT question, answer FROM questions
+      WHERE book_id=?1 AND status='done' AND id != ?2
+      ORDER BY created_at DESC LIMIT 2`,
+  ).bind(book.id, q.id).all<{ question: string; answer: string }>();
+
+  return c.json({
+    question: {
+      id: q.id,
+      bookId: book.id,
+      title: book.title,
+      author: book.author,
+      question: q.question,
+      attempt: q.attempts + 1,
+      markdown,
+      summary,
+      history: history.reverse(),
+    },
+  });
+});
+
+app.post('/ask/:id/complete', async (c) => {
+  const id = c.req.param('id');
+  const body = await readJson<{
+    answer: string; sections: string[]; model: string; usage: RunUsage;
+  }>(c.req);
+  const answer = (body.answer ?? '').trim();
+  if (!answer) throw new HTTPException(400, { message: 'Answer is empty' });
+
+  const u: Partial<RunUsage> = body.usage ?? {};
+  const res = await c.env.DB.prepare(
+    `UPDATE questions SET status='done', answer=?1, sections=?2, model=?3,
+                          input_tokens=?4, output_tokens=?5, cost_usd=?6,
+                          answered_at=?7, error=NULL
+      WHERE id=?8`,
+  )
+    .bind(
+      answer,
+      JSON.stringify(Array.isArray(body.sections) ? body.sections.slice(0, 20) : []),
+      body.model ?? null,
+      Math.max(0, Math.round(u.inputTokens ?? 0)),
+      Math.max(0, Math.round(u.outputTokens ?? 0)),
+      Math.max(0, u.costUsd ?? 0),
+      Date.now(),
+      id,
+    )
+    .run();
+  if (!res.meta.changes) throw new HTTPException(404, { message: 'No such question' });
+  return c.json({ ok: true });
+});
+
+app.post('/ask/:id/fail', async (c) => {
+  const id = c.req.param('id');
+  const body = await readJson<{ error: string; retry: boolean }>(c.req);
+  const q = await c.env.DB.prepare('SELECT * FROM questions WHERE id = ?1')
+    .bind(id)
+    .first<QuestionRow>();
+  if (!q) throw new HTTPException(404, { message: 'No such question' });
+
+  const retryable = body.retry !== false && q.attempts < MAX_ATTEMPTS;
+  const message = (body.error ?? 'Could not answer').slice(0, 2000);
+  await c.env.DB.prepare(
+    retryable
+      ? `UPDATE questions SET status='queued', error=?1 WHERE id=?2`
+      : `UPDATE questions SET status='failed', error=?1, answered_at=${Date.now()} WHERE id=?2`,
+  ).bind(message, id).run();
+  return c.json({ ok: true, requeued: retryable });
+});
+
 app.post('/jobs/:id/progress', async (c) => {
   const body = await readJson<{ stage: string; done: number; total: number }>(c.req);
   const res = await c.env.DB.prepare(

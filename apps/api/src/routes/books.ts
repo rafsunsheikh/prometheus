@@ -3,7 +3,7 @@ import type { Context } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { requireUser } from '../lib/middleware';
 import { contentKey, countWords, deletePrefix, getText, newId, putText, readJson, summaryKey } from '../lib/storage';
-import type { BookRow, Env, JobRow, SummaryRow, Variables } from '../types';
+import type { BookRow, Env, JobRow, QuestionRow, SummaryRow, Variables } from '../types';
 
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
 app.use('*', requireUser);
@@ -188,10 +188,71 @@ app.post('/:id/summarize', async (c) => {
   return c.json({ jobId, alreadyRunning: false }, 202);
 });
 
+/** Longest question we will carry. Anything beyond this is a document, not a
+ *  question, and would crowd the retrieved passages out of the prompt. */
+const MAX_QUESTION_CHARS = 2000;
+
+app.post('/:id/ask', async (c) => {
+  const book = await ownedBook(c, c.req.param('id'));
+  const body = await readJson<{ question: string }>(c.req);
+  const question = (body.question ?? '').trim();
+
+  if (question.length < 3) throw new HTTPException(400, { message: 'Ask an actual question' });
+  if (question.length > MAX_QUESTION_CHARS) {
+    throw new HTTPException(413, { message: `Questions are capped at ${MAX_QUESTION_CHARS} characters.` });
+  }
+
+  const id = newId('q');
+  await c.env.DB.prepare(
+    `INSERT INTO questions (id, book_id, owner_email, question, status, created_at)
+     VALUES (?1,?2,?3,?4,'queued',?5)`,
+  )
+    .bind(id, book.id, c.get('user').email, question, Date.now())
+    .run();
+
+  return c.json({ questionId: id }, 201);
+});
+
+app.get('/:id/questions', async (c) => {
+  const book = await ownedBook(c, c.req.param('id'));
+  const { results } = await c.env.DB.prepare(
+    `SELECT * FROM questions WHERE book_id = ?1 ORDER BY created_at ASC`,
+  )
+    .bind(book.id)
+    .all<QuestionRow>();
+
+  // How much work sits in front of a pending question, so the reader can be
+  // told why they are waiting rather than watching an unexplained spinner.
+  const pending = results.some((q) => q.status === 'queued' || q.status === 'running');
+  let waitingFor: { title: string; stage: string | null; done: number; total: number } | null = null;
+  if (pending) {
+    waitingFor = await c.env.DB.prepare(
+      `SELECT b.title, j.stage, j.progress_done AS done, j.progress_total AS total
+         FROM jobs j JOIN books b ON b.id = j.book_id
+        WHERE j.status = 'running' LIMIT 1`,
+    ).first<{ title: string; stage: string | null; done: number; total: number }>();
+  }
+
+  return c.json({
+    questions: results.map((q) => ({
+      id: q.id,
+      question: q.question,
+      answer: q.answer,
+      sections: q.sections ? (JSON.parse(q.sections) as string[]) : [],
+      status: q.status,
+      error: q.error,
+      createdAt: q.created_at,
+      answeredAt: q.answered_at,
+    })),
+    waitingFor,
+  });
+});
+
 app.delete('/:id', async (c) => {
   const book = await ownedBook(c, c.req.param('id'));
   await deletePrefix(c.env, `books/${book.id}/`);
   await c.env.DB.batch([
+    c.env.DB.prepare('DELETE FROM questions WHERE book_id = ?1').bind(book.id),
     c.env.DB.prepare('DELETE FROM summaries WHERE book_id = ?1').bind(book.id),
     c.env.DB.prepare('DELETE FROM jobs WHERE book_id = ?1').bind(book.id),
     c.env.DB.prepare('DELETE FROM books WHERE id = ?1').bind(book.id),
