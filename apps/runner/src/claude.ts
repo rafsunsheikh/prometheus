@@ -21,7 +21,33 @@ export interface ClaudeResult {
  *  - --restricted removes Bash/Edit/etc. Summarizing needs no tools, and a
  *    summarizer that cannot touch the filesystem is one less thing to reason about.
  */
-export function runClaude(prompt: string, systemPrompt?: string): Promise<ClaudeResult> {
+/** Tools a summarizer has no business touching, for Claude Code versions that
+ *  predate the single `--restricted` switch. */
+const TOOL_DENYLIST = [
+  'Bash', 'Edit', 'Write', 'Read', 'Glob', 'Grep',
+  'WebFetch', 'WebSearch', 'NotebookEdit', 'Task',
+];
+
+let restrictedSupport: Promise<boolean> | null = null;
+
+/**
+ * `--restricted` is not in every Claude Code build, and the runner may well sit
+ * on a machine a few versions behind. Probe once and fall back to naming the
+ * tools explicitly, so the same safety property holds either way.
+ */
+function supportsRestricted(): Promise<boolean> {
+  restrictedSupport ??= new Promise<boolean>((resolve) => {
+    const probe = spawn(config.claudeBin, ['--help'], { stdio: ['ignore', 'pipe', 'ignore'] });
+    let help = '';
+    probe.stdout.on('data', (d) => (help += d));
+    probe.on('error', () => resolve(false));
+    probe.on('close', () => resolve(help.includes('--restricted')));
+  });
+  return restrictedSupport;
+}
+
+export async function runClaude(prompt: string, systemPrompt?: string): Promise<ClaudeResult> {
+  const restricted = await supportsRestricted();
   return new Promise((resolve, reject) => {
     const scratch = mkdtempSync(join(tmpdir(), 'socrates-'));
     const args = [
@@ -30,9 +56,13 @@ export function runClaude(prompt: string, systemPrompt?: string): Promise<Claude
       'json',
       '--model',
       config.model,
-      '--restricted',
       '--strict-mcp-config',
     ];
+    if (restricted) {
+      args.push('--restricted');
+    } else {
+      args.push('--disallowedTools', TOOL_DENYLIST.join(' '));
+    }
     if (systemPrompt) args.push('--append-system-prompt', systemPrompt);
 
     const env = { ...process.env };
