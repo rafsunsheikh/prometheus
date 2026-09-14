@@ -27,6 +27,11 @@ Restart=always
 RestartSec=15
 # Summarizing a long book is a long-running child process; give it room.
 TimeoutStopSec=300
+# Send SIGTERM to the runner only, never to the Claude process it is driving.
+# Under the default (control-group) systemd signals the whole cgroup, killing
+# the summarization mid-flight and discarding minutes of subscription usage —
+# which makes the runner's own "finish the current job first" handler useless.
+KillMode=mixed
 
 [Install]
 WantedBy=multi-user.target
