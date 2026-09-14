@@ -69,6 +69,14 @@ app.get('/stats', async (c) => {
        FROM questions WHERE status = 'done'`,
   ).first<{ asked: number; input_tokens: number; output_tokens: number; cost_usd: number }>();
 
+  const mm = await c.env.DB.prepare(
+    `SELECT COUNT(*) AS built,
+            COALESCE(SUM(input_tokens),0)  AS input_tokens,
+            COALESCE(SUM(output_tokens),0) AS output_tokens,
+            COALESCE(SUM(cost_usd),0)      AS cost_usd
+       FROM mindmaps WHERE status = 'done'`,
+  ).first<{ built: number; input_tokens: number; output_tokens: number; cost_usd: number }>();
+
   const jobs = await c.env.DB.prepare(
     `SELECT status, COUNT(*) AS n FROM jobs GROUP BY status`,
   ).all<{ status: string; n: number }>();
@@ -96,8 +104,9 @@ app.get('/stats', async (c) => {
 
   const t = totals ?? ({} as Totals);
   const q = qs ?? { asked: 0, input_tokens: 0, output_tokens: 0, cost_usd: 0 };
-  const inputTokens = (t.input_tokens ?? 0) + q.input_tokens;
-  const outputTokens = (t.output_tokens ?? 0) + q.output_tokens;
+  const m = mm ?? { built: 0, input_tokens: 0, output_tokens: 0, cost_usd: 0 };
+  const inputTokens = (t.input_tokens ?? 0) + q.input_tokens + m.input_tokens;
+  const outputTokens = (t.output_tokens ?? 0) + q.output_tokens + m.output_tokens;
   const tokens = inputTokens + outputTokens;
 
   return c.json({
@@ -111,7 +120,8 @@ app.get('/stats', async (c) => {
       outputTokens,
       tokens,
       questionsAsked: q.asked,
-      costUsd: (t.cost_usd ?? 0) + q.cost_usd,
+      mapsBuilt: m.built,
+      costUsd: (t.cost_usd ?? 0) + q.cost_usd + m.cost_usd,
       seconds: t.seconds ?? 0,
       // How many summaries carry real token data. Anything summarized before
       // usage was recorded reports zero, and saying so beats a total that

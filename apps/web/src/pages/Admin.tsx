@@ -84,7 +84,8 @@ export function Admin() {
           value={String(t.summarized)}
           sub={
             `${t.books !== t.summarized ? `${t.books} uploaded in total` : 'all uploads summarized'}` +
-            (t.questionsAsked ? ` · ${t.questionsAsked} question${t.questionsAsked === 1 ? '' : 's'} answered` : '')
+            (t.questionsAsked ? ` · ${t.questionsAsked} question${t.questionsAsked === 1 ? '' : 's'} answered` : '') +
+            (t.mapsBuilt ? ` · ${t.mapsBuilt} map${t.mapsBuilt === 1 ? '' : 's'}` : '')
           }
         />
         <Stat

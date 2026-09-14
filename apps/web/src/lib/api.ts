@@ -42,7 +42,7 @@ export interface MindmapState {
 export interface AdminStats {
   totals: {
     books: number; summarized: number; words: number; chars: number; pages: number;
-    inputTokens: number; outputTokens: number; tokens: number; questionsAsked: number; costUsd: number;
+    inputTokens: number; outputTokens: number; tokens: number; questionsAsked: number; mapsBuilt: number; costUsd: number;
     seconds: number; measured: number; unmeasured: number;
   };
   wordsPerPage: number;
