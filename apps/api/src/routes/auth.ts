@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
-import { isAllowed, issueSessionToken, sessionTtlSeconds, verifyGoogleIdToken } from '../lib/auth';
+import { issueSessionToken, resolveIdentity, sessionTtlSeconds, verifyGoogleIdToken } from '../lib/auth';
 import { requireUser } from '../lib/middleware';
 import { readJson } from '../lib/storage';
 import type { Env, Variables } from '../types';
@@ -20,13 +20,23 @@ app.post('/google', async (c) => {
     });
   }
 
-  if (!isAllowed(c.env, user.email)) {
+  const canonical = resolveIdentity(c.env, user.email);
+  if (!canonical) {
     // Deliberately explicit: this is a private app, and a clear "not on the
     // list" beats a vague failure when you are the one maintaining the list.
     throw new HTTPException(403, {
       message: `${user.email} is not on the Prometheus allowlist.`,
     });
   }
+
+  // Sign-in resolves to the canonical identity, so every one of a person's
+  // addresses opens the same library rather than a separate empty one.
+  const signedInAs = user.email;
+  user = {
+    ...user,
+    email: canonical,
+    via: canonical === signedInAs ? null : signedInAs,
+  };
 
   const now = Date.now();
   await c.env.DB.prepare(

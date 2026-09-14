@@ -11,14 +11,74 @@ function googleJwks() {
   return jwks;
 }
 
-export function allowlist(env: Env): string[] {
+/**
+ * Reduce an address to the form that actually identifies the mailbox.
+ *
+ * Gmail ignores dots in the local part, ignores anything after a `+`, and
+ * treats googlemail.com as gmail.com — so those really are one account, and
+ * matching them literally would reject an address that is genuinely on the
+ * list. Every other domain is left alone, where dots are significant.
+ */
+function normalizeEmail(raw: string): string {
+  const email = raw.trim().toLowerCase();
+  const at = email.lastIndexOf('@');
+  if (at === -1) return email;
+
+  const domain = email.slice(at + 1);
+  let local = email.slice(0, at);
+
+  if (domain === 'gmail.com' || domain === 'googlemail.com') {
+    local = (local.split('+')[0] ?? '').replace(/\./g, '');
+    return `${local}@gmail.com`;
+  }
+  return `${local}@${domain}`;
+}
+
+export interface Identity {
+  /** The address that owns this person's library. */
+  canonical: string;
+  /** Every normalized address that signs in as this person. */
+  aliases: string[];
+}
+
+/**
+ * Parse ALLOWED_EMAILS into people.
+ *
+ *   "you@example.com|you.alt@example.com, friend@example.com"
+ *
+ * `,` separates different people — as it always has, so an existing flat list
+ * keeps its meaning. `|` joins addresses belonging to the SAME person, and the
+ * first of those is the identity their books are filed under.
+ *
+ * The safe direction matters here: forget a `|` and you get two separate
+ * private libraries. Nothing is ever shared by accident.
+ */
+export function identities(env: Env): Identity[] {
   return env.ALLOWED_EMAILS.split(',')
-    .map((e) => e.trim().toLowerCase())
-    .filter(Boolean);
+    .map((group) => group.trim())
+    .filter(Boolean)
+    .map((group) => {
+      const members = group.split('|').map((e) => e.trim()).filter(Boolean);
+      return {
+        canonical: (members[0] ?? '').toLowerCase(),
+        aliases: members.map(normalizeEmail),
+      };
+    })
+    .filter((id) => id.canonical !== '');
+}
+
+/**
+ * Map a Google address to the identity that owns the library, or null if it is
+ * not on the list. A canonical address resolves to itself, so this doubles as
+ * the allowlist check.
+ */
+export function resolveIdentity(env: Env, email: string): string | null {
+  const normalized = normalizeEmail(email);
+  return identities(env).find((id) => id.aliases.includes(normalized))?.canonical ?? null;
 }
 
 export function isAllowed(env: Env, email: string): boolean {
-  return allowlist(env).includes(email.trim().toLowerCase());
+  return resolveIdentity(env, email) !== null;
 }
 
 /**
@@ -42,6 +102,7 @@ export async function verifyGoogleIdToken(env: Env, credential: string): Promise
 
   return {
     email: email.toLowerCase(),
+    via: null,
     name: typeof payload.name === 'string' ? payload.name : null,
     picture: typeof payload.picture === 'string' ? payload.picture : null,
   };
@@ -52,7 +113,9 @@ function secretKey(env: Env): Uint8Array {
 }
 
 export async function issueSessionToken(env: Env, user: SessionUser): Promise<string> {
-  return new SignJWT({ name: user.name, picture: user.picture })
+  // Subject is the canonical identity, so ownership follows the person rather
+  // than whichever of their accounts they happened to use.
+  return new SignJWT({ name: user.name, picture: user.picture, via: user.via })
     .setProtectedHeader({ alg: 'HS256' })
     .setSubject(user.email)
     .setIssuer('prometheus')
@@ -67,13 +130,16 @@ export async function verifySessionToken(env: Env, token: string): Promise<Sessi
     issuer: 'prometheus',
     audience: 'prometheus-web',
   });
-  const email = payload.sub;
-  if (!email) throw new Error('Session token has no subject');
-  // Re-check the allowlist on every request so revoking access is immediate,
-  // rather than waiting for an already-issued token to expire.
-  if (!isAllowed(env, email)) throw new Error('Access revoked');
+  const subject = payload.sub;
+  if (!subject) throw new Error('Session token has no subject');
+  // Re-resolve on every request so revoking access is immediate, rather than
+  // waiting for an already-issued token to expire. This also re-applies any
+  // change to the alias groups without forcing a fresh sign-in.
+  const email = resolveIdentity(env, subject);
+  if (!email) throw new Error('Access revoked');
   return {
     email,
+    via: typeof payload.via === 'string' ? payload.via : null,
     name: typeof payload.name === 'string' ? payload.name : null,
     picture: typeof payload.picture === 'string' ? payload.picture : null,
   };

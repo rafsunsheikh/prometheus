@@ -55,6 +55,7 @@ sit in the queue until it comes back.
 | --- | --- | --- |
 | "I am this Gmail account" | Worker | Google's JWT signature, verified against Google's JWKS |
 | "That account may use Prometheus" | Worker | `ALLOWED_EMAILS`, re-checked on **every** request, not just at sign-in |
+| "...and which library is theirs" | Worker | The address resolves to a canonical identity, so a person's several Google accounts open one library rather than several empty ones |
 | "I am the runner" | Worker | Shared `RUNNER_TOKEN`, compared in constant time |
 | "This book is mine" | Worker | Every book query is scoped by `owner_email` |
 

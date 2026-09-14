@@ -193,9 +193,37 @@ npm run dev:runner
 
 ## Adding or removing people
 
-Edit `ALLOWED_EMAILS` in `apps/api/wrangler.toml` and redeploy. The allowlist is
-re-checked on every request, so removing someone cuts them off immediately rather
-than when their token happens to expire.
+Edit `ALLOWED_EMAILS` in `apps/api/wrangler.toml` and redeploy. It is re-checked
+on every request, so removing someone cuts them off immediately rather than when
+their token happens to expire.
+
+Two separators, and the difference matters:
+
+```toml
+ALLOWED_EMAILS = "you@example.com|you.alt@example.com, friend@example.com"
+#                 └──── one person, two addresses ────┘  └─ a different person
+```
+
+- **`,` separates people.** Each gets their own private library.
+- **`|` joins one person's addresses.** They all open the same library, and the
+  first address is the identity the books are filed under.
+
+If you forget a `|`, you get two separate libraries — never an accidentally
+shared one. Adding an alias to an existing person is safe: their books stay put,
+because ownership follows the first address in the group. Reordering a group,
+though, re-files that person's library under a different address, so don't.
+
+> Gmail ignores dots and `+tags`, and treats `googlemail.com` as `gmail.com`, so
+> those variants all resolve to the same account automatically. Dots **are**
+> significant on every other domain.
+
+Whichever address you sign in with, the header shows the library you are in and
+which account you arrived by.
+
+### Also: Google's own list
+
+The consent screen in **Testing** mode only admits accounts listed as test users.
+Add every address there too, or sign-in fails before Prometheus ever sees it.
 
 ## Notes and limits
 

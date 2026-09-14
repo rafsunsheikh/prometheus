@@ -2,7 +2,10 @@ const BASE = (import.meta.env.VITE_API_URL ?? '').replace(/\/+$/, '');
 const TOKEN_KEY = 'prometheus.session';
 
 export interface User {
+  /** The identity owning the library. */
   email: string;
+  /** Which of your addresses you signed in with, when it is not `email`. */
+  via: string | null;
   name: string | null;
   picture: string | null;
 }

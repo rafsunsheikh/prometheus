@@ -11,7 +11,10 @@ export interface Env {
 }
 
 export interface SessionUser {
+  /** The identity that owns the library — the canonical address. */
   email: string;
+  /** The address actually signed in with, when it differs from `email`. */
+  via: string | null;
   name: string | null;
   picture: string | null;
 }

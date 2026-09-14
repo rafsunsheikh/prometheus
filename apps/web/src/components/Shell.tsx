@@ -34,7 +34,12 @@ export function Shell({ children }: { children: ReactNode }) {
                 <div className="text-sm leading-tight font-medium text-slate-200">
                   {user.name ?? user.email}
                 </div>
-                <div className="text-[11px] leading-tight text-slate-500">{user.email}</div>
+                <div className="text-[11px] leading-tight text-slate-500">
+                  {user.email}
+                  {user.via && (
+                    <span className="text-slate-600"> · via {user.via}</span>
+                  )}
+                </div>
               </div>
               {user.picture ? (
                 <img
