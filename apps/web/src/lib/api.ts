@@ -8,6 +8,23 @@ export interface User {
   via: string | null;
   name: string | null;
   picture: string | null;
+  /** Advisory only — the server re-checks on every admin request. */
+  isAdmin?: boolean;
+}
+
+export interface AdminStats {
+  totals: {
+    books: number; summarized: number; words: number; chars: number; pages: number;
+    inputTokens: number; outputTokens: number; tokens: number; costUsd: number;
+    seconds: number; measured: number; unmeasured: number;
+  };
+  wordsPerPage: number;
+  jobs: Record<string, number>;
+  perUser: { email: string; books: number; words: number; summarized: number; tokens: number; cost_usd: number }[];
+  recent: {
+    title: string; email: string; words: number; created_at: number;
+    tokens: number; cost_usd: number; chunks: number; duration_ms: number; model: string | null;
+  }[];
 }
 
 export interface JobState {
@@ -162,6 +179,8 @@ export const api = {
     request<{ jobId: string; alreadyRunning: boolean }>(`/api/books/${id}/summarize`, {
       method: 'POST',
     }),
+
+  adminStats: () => request<AdminStats>('/api/admin/stats'),
 
   deleteBook: (id: string) => request<{ deleted: string }>(`/api/books/${id}`, { method: 'DELETE' }),
 };

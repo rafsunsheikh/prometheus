@@ -13,3 +13,8 @@ RUNNER_TOKEN="change-me-too"
 # Local dev only: Vite falls back to another port when 5173 is taken, so accept
 # any localhost port here. Production origins are the exact ones in wrangler.toml.
 ALLOWED_ORIGINS="http://localhost:*,http://127.0.0.1:*"
+
+# Who may see the admin view — a separate list from ALLOWED_EMAILS on purpose:
+# being allowed to use Prometheus should not imply seeing everyone's usage.
+# Unset means nobody.
+ADMIN_EMAILS="you@example.com"

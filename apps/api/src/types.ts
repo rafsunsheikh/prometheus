@@ -8,6 +8,8 @@ export interface Env {
   // secrets
   SESSION_SECRET: string;
   RUNNER_TOKEN: string;
+  /** Who may see the admin view. Unset means nobody — it fails closed. */
+  ADMIN_EMAILS: string;
 }
 
 export interface SessionUser {
@@ -60,4 +62,18 @@ export interface SummaryRow {
   model: string | null;
   word_count: number;
   created_at: number;
+  input_tokens: number;
+  output_tokens: number;
+  cost_usd: number;
+  chunks: number;
+  duration_ms: number;
+}
+
+/** What a runner reports about the work it just did. */
+export interface RunUsage {
+  inputTokens: number;
+  outputTokens: number;
+  costUsd: number;
+  chunks: number;
+  durationMs: number;
 }

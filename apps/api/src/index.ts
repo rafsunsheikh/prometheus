@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { HTTPException } from 'hono/http-exception';
 import authRoutes from './routes/auth';
+import adminRoutes from './routes/admin';
 import bookRoutes from './routes/books';
 import runnerRoutes from './routes/runner';
 import type { Env, Variables } from './types';
@@ -40,6 +41,7 @@ app.get('/', (c) =>
 
 app.route('/api/auth', authRoutes);
 app.route('/api/books', bookRoutes);
+app.route('/api/admin', adminRoutes);
 app.route('/api/runner', runnerRoutes);
 
 app.notFound((c) => c.json({ error: 'Not found' }, 404));

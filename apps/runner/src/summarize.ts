@@ -60,6 +60,9 @@ export interface SummarizeOutput {
   model: string;
   costUsd: number;
   chunks: number;
+  inputTokens: number;
+  outputTokens: number;
+  durationMs: number;
 }
 
 export async function summarizeBook(input: SummarizeInput): Promise<SummarizeOutput> {
@@ -71,7 +74,10 @@ export async function summarizeBook(input: SummarizeInput): Promise<SummarizeOut
     AUTHOR_SUFFIX: input.author ? ` of ${input.title} by ${input.author}` : '',
   };
 
+  const startedAt = Date.now();
   let totalCost = 0;
+  let inputTokens = 0;
+  let outputTokens = 0;
   let model = config.model;
 
   // Short enough to read whole: one pass keeps the summary far more coherent.
@@ -82,7 +88,15 @@ export async function summarizeBook(input: SummarizeInput): Promise<SummarizeOut
       system,
     );
     await input.onProgress('Complete', 1, 1);
-    return { markdown: result.text, model: result.model, costUsd: result.costUsd, chunks: 1 };
+    return {
+      markdown: result.text,
+      model: result.model,
+      costUsd: result.costUsd,
+      chunks: 1,
+      inputTokens: result.inputTokens,
+      outputTokens: result.outputTokens,
+      durationMs: Date.now() - startedAt,
+    };
   }
 
   // Map: one summary per section. Sequential on purpose — parallel headless
@@ -103,6 +117,8 @@ export async function summarizeBook(input: SummarizeInput): Promise<SummarizeOut
     );
     sectionSummaries.push(result.text);
     totalCost += result.costUsd;
+    inputTokens += result.inputTokens;
+    outputTokens += result.outputTokens;
     model = result.model;
   }
 
@@ -111,6 +127,8 @@ export async function summarizeBook(input: SummarizeInput): Promise<SummarizeOut
   const joined = sectionSummaries.join('\n\n---\n\n');
   const finalResult = await runClaude(fill(prompt('reduce'), { ...vars, CONTENT: joined }), system);
   totalCost += finalResult.costUsd;
+  inputTokens += finalResult.inputTokens;
+  outputTokens += finalResult.outputTokens;
 
   await input.onProgress('Complete', total, total);
 
@@ -119,5 +137,8 @@ export async function summarizeBook(input: SummarizeInput): Promise<SummarizeOut
     model: finalResult.model || model,
     costUsd: totalCost,
     chunks: chunks.length,
+    inputTokens,
+    outputTokens,
+    durationMs: Date.now() - startedAt,
   };
 }

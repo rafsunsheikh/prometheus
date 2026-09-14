@@ -66,10 +66,15 @@ export const api = {
       body: JSON.stringify({ stage, done, total }),
     }),
 
-  complete: (jobId: string, markdown: string, model: string) =>
+  complete: (
+    jobId: string,
+    markdown: string,
+    model: string,
+    usage: { inputTokens: number; outputTokens: number; costUsd: number; chunks: number; durationMs: number },
+  ) =>
     call(`/api/runner/jobs/${jobId}/complete`, {
       method: 'POST',
-      body: JSON.stringify({ markdown, model }),
+      body: JSON.stringify({ markdown, model, usage }),
     }),
 
   fail: (jobId: string, error: string, retry: boolean) =>

@@ -6,7 +6,9 @@ import { Wordmark } from './Brand';
 
 export function Shell({ children }: { children: ReactNode }) {
   const { user, signOut } = useAuth();
-  const onLibrary = useLocation().pathname === '/';
+  const path = useLocation().pathname;
+  const onLibrary = path === '/';
+  const onAdmin = path === '/admin';
 
   return (
     <div className="flex min-h-dvh flex-col">

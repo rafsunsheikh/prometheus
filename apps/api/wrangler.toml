@@ -15,6 +15,11 @@ workers_dev = true
 #   "|"  joins addresses belonging to the SAME person; the first is the
 #        identity their books are filed under, the rest are aliases for it.
 # Forgetting a "|" gives separate libraries, never shared ones.
+#
+# ADMIN_EMAILS is a secret too — who may see the admin view. Kept separate from
+# ALLOWED_EMAILS deliberately: being allowed in should not imply seeing what
+# everyone else's reading costs. Unset means nobody; it fails closed.
+#   echo 'you@example.com' | npx wrangler secret put ADMIN_EMAILS
 # Origins allowed to call this API (comma-separated, no trailing slash).
 ALLOWED_ORIGINS = "https://rafsunsheikh.github.io,http://localhost:5173"
 # Google OAuth Web client ID (public value — safe to commit).

@@ -31,11 +31,19 @@ async function handleOneJob(): Promise<boolean> {
       },
     });
 
-    await api.complete(job.id, result.markdown, result.model);
+    await api.complete(job.id, result.markdown, result.model, {
+      inputTokens: result.inputTokens,
+      outputTokens: result.outputTokens,
+      costUsd: result.costUsd,
+      chunks: result.chunks,
+      durationMs: result.durationMs,
+    });
     const secs = ((Date.now() - startedAt) / 1000).toFixed(0);
     log(
       `Done ${job.id} in ${secs}s — ${result.chunks} section(s), ` +
-        `${result.markdown.length.toLocaleString()} chars, ~$${result.costUsd.toFixed(2)} of subscription usage`,
+        `${result.markdown.length.toLocaleString()} chars, ` +
+        `${(result.inputTokens + result.outputTokens).toLocaleString()} tokens, ` +
+        `~$${result.costUsd.toFixed(2)} of subscription usage`,
     );
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

@@ -3,6 +3,7 @@ import { HTTPException } from 'hono/http-exception';
 import { identities, issueSessionToken, resolveIdentity, sessionTtlSeconds, verifyGoogleIdToken } from '../lib/auth';
 import { requireUser } from '../lib/middleware';
 import { readJson } from '../lib/storage';
+import { adminCheck } from './admin';
 import type { Env, Variables } from '../types';
 
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
@@ -59,10 +60,13 @@ app.post('/google', async (c) => {
   return c.json({
     token: await issueSessionToken(c.env, user),
     expiresIn: sessionTtlSeconds,
-    user,
+    user: { ...user, isAdmin: adminCheck(c.env, user.email) },
   });
 });
 
-app.get('/me', requireUser, (c) => c.json({ user: c.get('user') }));
+app.get('/me', requireUser, (c) => {
+  const user = c.get('user');
+  return c.json({ user: { ...user, isAdmin: adminCheck(c.env, user.email) } });
+});
 
 export default app;

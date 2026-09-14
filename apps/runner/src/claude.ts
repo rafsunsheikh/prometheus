@@ -8,6 +8,8 @@ export interface ClaudeResult {
   text: string;
   model: string;
   costUsd: number;
+  inputTokens: number;
+  outputTokens: number;
 }
 
 /**
@@ -101,7 +103,17 @@ export async function runClaude(prompt: string, systemPrompt?: string): Promise<
       const text = typeof parsed.result === 'string' ? parsed.result.trim() : '';
       if (!text) return reject(new Error('Claude returned an empty result'));
 
-      const usage = (parsed.modelUsage ?? {}) as Record<string, unknown>;
+      const usage = (parsed.modelUsage ?? {}) as Record<string, Record<string, unknown>>;
+
+      // Sum across every model the run touched: the main model plus whatever
+      // Claude Code used for its own overhead, since all of it is real usage.
+      let inputTokens = 0;
+      let outputTokens = 0;
+      for (const m of Object.values(usage)) {
+        inputTokens += Number(m?.inputTokens ?? 0) + Number(m?.cacheReadInputTokens ?? 0) +
+          Number(m?.cacheCreationInputTokens ?? 0);
+        outputTokens += Number(m?.outputTokens ?? 0);
+      }
       // Prefer the heaviest model used; the small one is background overhead.
       const model = Object.keys(usage).filter((m) => !m.includes('haiku')).at(-1)
         ?? Object.keys(usage).at(-1)
@@ -111,6 +123,8 @@ export async function runClaude(prompt: string, systemPrompt?: string): Promise<
         text,
         model,
         costUsd: typeof parsed.total_cost_usd === 'number' ? parsed.total_cost_usd : 0,
+        inputTokens,
+        outputTokens,
       });
     });
 

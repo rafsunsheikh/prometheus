@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { requireRunner } from '../lib/middleware';
 import { countWords, getText, newId, putText, readJson, summaryKey } from '../lib/storage';
-import type { BookRow, Env, JobRow, Variables } from '../types';
+import type { BookRow, Env, JobRow, RunUsage, Variables } from '../types';
 
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
 app.use('*', requireRunner);
@@ -105,24 +105,34 @@ app.post('/jobs/:id/progress', async (c) => {
 
 app.post('/jobs/:id/complete', async (c) => {
   const jobId = c.req.param('id');
-  const body = await readJson<{ markdown: string; model: string }>(c.req);
+  const body = await readJson<{ markdown: string; model: string; usage: RunUsage }>(c.req);
   const markdown = (body.markdown ?? '').trim();
   if (!markdown) throw new HTTPException(400, { message: 'Summary markdown is empty' });
 
   const job = await c.env.DB.prepare('SELECT * FROM jobs WHERE id = ?1').bind(jobId).first<JobRow>();
   if (!job) throw new HTTPException(404, { message: 'No such job' });
 
+  const u: Partial<RunUsage> = body.usage ?? {};
   const key = summaryKey(job.book_id);
   await putText(c.env, key, markdown);
 
   const now = Date.now();
   await c.env.DB.batch([
     c.env.DB.prepare(
-      `INSERT INTO summaries (book_id, job_id, summary_key, model, word_count, created_at)
-       VALUES (?1,?2,?3,?4,?5,?6)
+      `INSERT INTO summaries (book_id, job_id, summary_key, model, word_count, created_at,
+                              input_tokens, output_tokens, cost_usd, chunks, duration_ms)
+       VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)
        ON CONFLICT(book_id) DO UPDATE SET
-         job_id=?2, summary_key=?3, model=?4, word_count=?5, created_at=?6`,
-    ).bind(job.book_id, jobId, key, body.model ?? null, countWords(markdown), now),
+         job_id=?2, summary_key=?3, model=?4, word_count=?5, created_at=?6,
+         input_tokens=?7, output_tokens=?8, cost_usd=?9, chunks=?10, duration_ms=?11`,
+    ).bind(
+      job.book_id, jobId, key, body.model ?? null, countWords(markdown), now,
+      Math.max(0, Math.round(u.inputTokens ?? 0)),
+      Math.max(0, Math.round(u.outputTokens ?? 0)),
+      Math.max(0, u.costUsd ?? 0),
+      Math.max(0, Math.round(u.chunks ?? 0)),
+      Math.max(0, Math.round(u.durationMs ?? 0)),
+    ),
     c.env.DB.prepare(
       `UPDATE jobs SET status='done', stage='Complete', error=NULL, finished_at=?1,
                        progress_done = progress_total
