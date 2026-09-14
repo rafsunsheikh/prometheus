@@ -82,15 +82,22 @@ app.post('/claim', async (c) => {
   });
 });
 
+/**
+ * Progress doubles as a heartbeat: it pushes `claimed_at` forward so a job that
+ * legitimately runs longer than STALE_MS is not mistaken for a dead one. Without
+ * this, a long book gets requeued mid-run and a second runner starts summarizing
+ * the same book in parallel — both finish, both write, double the usage spent.
+ */
 app.post('/jobs/:id/progress', async (c) => {
   const body = await readJson<{ stage: string; done: number; total: number }>(c.req);
   const res = await c.env.DB.prepare(
     `UPDATE jobs SET stage = COALESCE(?1, stage),
                      progress_done = COALESCE(?2, progress_done),
-                     progress_total = COALESCE(?3, progress_total)
+                     progress_total = COALESCE(?3, progress_total),
+                     claimed_at = ?5
       WHERE id = ?4 AND status = 'running'`,
   )
-    .bind(body.stage ?? null, body.done ?? null, body.total ?? null, c.req.param('id'))
+    .bind(body.stage ?? null, body.done ?? null, body.total ?? null, c.req.param('id'), Date.now())
     .run();
   if (!res.meta.changes) throw new HTTPException(409, { message: 'Job is not running' });
   return c.json({ ok: true });

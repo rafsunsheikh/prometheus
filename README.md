@@ -130,6 +130,31 @@ npm run once -w @prometheus/runner   # drain one job and exit
 To keep it alive, see `apps/runner/com.prometheus.runner.plist.example` (macOS)
 or `apps/runner/prometheus-runner.service.example` (Linux).
 
+### 4b. Using Prometheus from more than one machine
+
+The web app needs nothing — it is a website. Sign in with Google from any
+browser and your whole library is there, because books and summaries live in D1
+and R2 rather than on any one computer. Uploading works from anywhere too:
+extraction runs in whatever browser you are sitting at, and only the text is
+sent on.
+
+The **runner** is the only part tied to a machine, because it needs your Claude
+login. Two options:
+
+- **Run it on your always-on box** (home server, spare laptop). Jobs you queue
+  from a phone or a work laptop get picked up whether or not your Mac is awake.
+- **Run it on several of your machines at once.** This is safe: claiming a job
+  is an atomic conditional `UPDATE`, so two runners can never take the same job,
+  and a long queue simply drains faster.
+
+Each machine needs the repo, `apps/runner/.env` with the same `RUNNER_TOKEN`,
+and Claude Code already signed in as that user.
+
+> Running multiple runners is safe **because Prometheus is single-user**. Every
+> runner claims from one shared queue regardless of who owns the job, so before
+> adding a second person to `ALLOWED_EMAILS`, the claim query must be scoped by
+> owner — otherwise their runner would summarize your books on their machine.
+
 ### 5. Deploy the web app
 
 In the GitHub repo, under **Settings → Secrets and variables → Actions → Variables**,

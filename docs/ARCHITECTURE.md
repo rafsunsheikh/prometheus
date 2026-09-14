@@ -83,7 +83,10 @@ finishes.
 
 ## Failure handling
 
-- A job whose runner dies mid-flight is requeued after 30 minutes of silence.
+- A job whose runner dies mid-flight is requeued after 30 minutes of **silence** —
+  progress updates count as a heartbeat and push that deadline forward, so a book
+  that genuinely takes longer than 30 minutes is not mistaken for a dead run and
+  handed to a second runner while the first is still working on it.
 - Three failed attempts and the job stops retrying and reports the error.
 - Progress updates are best-effort — a failed progress POST never kills a
   summarization that is otherwise going fine.
