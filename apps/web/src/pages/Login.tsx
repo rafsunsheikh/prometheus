@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { BookOpen, Lock, Sparkles } from 'lucide-react';
+import { BookOpen, Sparkles } from 'lucide-react';
 import { GOOGLE_CLIENT_ID } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { Flame } from '../components/Brand';
@@ -78,28 +78,26 @@ export function Login() {
           <p className="mt-2.5 text-sm text-slate-400">A private workshop for a few good tools.</p>
         </div>
 
-        <div className="panel p-7">
-          <div className="mb-6 flex items-start gap-3 rounded-xl border border-white/8 bg-white/3 px-4 py-3">
-            <Lock className="mt-0.5 h-4 w-4 shrink-0 text-ember-400" />
-            <p className="text-[13px] leading-relaxed text-slate-400">
-              Access is limited to an allowlist. If your account is not on it, sign-in will be
-              refused — that check happens on the server, not here.
-            </p>
-          </div>
-
-          <div className="flex min-h-[46px] justify-center">
+        <div className="panel px-7 py-8">
+          <div className="flex min-h-[44px] items-center justify-center">
             {busy ? (
               <div className="flex items-center gap-2.5 text-sm text-slate-400">
                 <span className="h-4 w-4 animate-spin rounded-full border-2 border-ember-500 border-t-transparent" />
                 Verifying with Google…
               </div>
             ) : (
-              <div ref={buttonRef} />
+              /* Google renders its button inside an iframe with its own opaque
+                 backdrop, which shows as a pale rectangle behind the pill.
+                 Clipping to the same rounded shape hides the corners the
+                 iframe leaves behind. */
+              <div className="overflow-hidden rounded-full leading-[0]">
+                <div ref={buttonRef} />
+              </div>
             )}
           </div>
 
           {error && (
-            <div className="mt-5">
+            <div className="mt-6">
               <ErrorNote>{error}</ErrorNote>
             </div>
           )}
