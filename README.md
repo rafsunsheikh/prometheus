@@ -83,7 +83,6 @@ Then edit `apps/api/wrangler.toml`:
 
 ```toml
 [vars]
-ALLOWED_EMAILS  = "you.alt@example.com,friend@example.com"   # your allowlist
 ALLOWED_ORIGINS = "https://rafsunsheikh.github.io,http://localhost:5173"
 GOOGLE_CLIENT_ID = "<the client ID from step 2>"
 
@@ -91,12 +90,18 @@ GOOGLE_CLIENT_ID = "<the client ID from step 2>"
 database_id = "<the id wrangler printed>"
 ```
 
+The allowlist is deliberately **not** here — it is a secret, set below.
+
 Set the two secrets and deploy:
 
 ```bash
 cd apps/api
 openssl rand -base64 48 | npx wrangler secret put SESSION_SECRET
 openssl rand -hex 32   | npx wrangler secret put RUNNER_TOKEN   # save this, the runner needs it
+
+# Who may sign in. A secret rather than a var, because this repo is public and
+# these are real addresses. "," separates people, "|" joins one person's.
+echo 'you@example.com|you.alt@example.com' | npx wrangler secret put ALLOWED_EMAILS
 npx wrangler d1 migrations apply prometheus-db --remote
 npx wrangler deploy
 ```
@@ -193,9 +198,19 @@ npm run dev:runner
 
 ## Adding or removing people
 
-Edit `ALLOWED_EMAILS` in `apps/api/wrangler.toml` and redeploy. It is re-checked
-on every request, so removing someone cuts them off immediately rather than when
-their token happens to expire.
+`ALLOWED_EMAILS` is a Cloudflare **secret**, not a committed value — this repo is
+public and those are real addresses. To change it:
+
+```bash
+cd apps/api
+echo 'you@example.com|you.alt@example.com, friend@example.com' \
+  | npx wrangler secret put ALLOWED_EMAILS
+```
+
+No redeploy needed. It is re-read on every request, so removing someone cuts them
+off immediately rather than when their token happens to expire. If the secret is
+never set, nobody gets in — it fails closed, and says so distinctly rather than
+pretending you are simply not on the list.
 
 Two separators, and the difference matters:
 

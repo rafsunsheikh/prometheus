@@ -1,4 +1,7 @@
 # Copy to apps/api/.dev.vars for local `wrangler dev`. Never commit .dev.vars.
+# Who may sign in. "," separates people, "|" joins one person's addresses.
+ALLOWED_EMAILS="you@example.com|you.alt@example.com"
+
 # Signing key for Prometheus session tokens. Generate with:
 #   openssl rand -base64 48
 SESSION_SECRET="change-me-to-a-long-random-string"

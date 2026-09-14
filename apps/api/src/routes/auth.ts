@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
-import { issueSessionToken, resolveIdentity, sessionTtlSeconds, verifyGoogleIdToken } from '../lib/auth';
+import { identities, issueSessionToken, resolveIdentity, sessionTtlSeconds, verifyGoogleIdToken } from '../lib/auth';
 import { requireUser } from '../lib/middleware';
 import { readJson } from '../lib/storage';
 import type { Env, Variables } from '../types';
@@ -17,6 +17,15 @@ app.post('/google', async (c) => {
   } catch (err) {
     throw new HTTPException(401, {
       message: err instanceof Error ? err.message : 'Could not verify Google token',
+    });
+  }
+
+  if (identities(c.env).length === 0) {
+    // Distinguish "the allowlist was never configured" from "you are not on
+    // it" — otherwise a missing secret looks exactly like a rejected user.
+    throw new HTTPException(503, {
+      message:
+        'The allowlist is not configured on the API. Set the ALLOWED_EMAILS secret (see apps/api/wrangler.toml).',
     });
   }
 

@@ -54,6 +54,10 @@ export interface Identity {
  * private libraries. Nothing is ever shared by accident.
  */
 export function identities(env: Env): Identity[] {
+  // ALLOWED_EMAILS is a secret; if it was never set, admit nobody rather than
+  // throwing. Fail closed, and let the caller say it is a misconfiguration.
+  if (!env.ALLOWED_EMAILS) return [];
+
   return env.ALLOWED_EMAILS.split(',')
     .map((group) => group.trim())
     .filter(Boolean)

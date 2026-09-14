@@ -5,13 +5,13 @@ compatibility_flags = ["nodejs_compat"]
 
 # Static vars (non-secret). Secrets go via `wrangler secret put`.
 [vars]
-# Who may sign in.
+# NOTE: ALLOWED_EMAILS is a SECRET, not a var — it holds real email addresses
+# and this file is public. Set it with:
+#   echo 'you@example.com|you.alt@example.com' | npx wrangler secret put ALLOWED_EMAILS
 #   ","  separates different PEOPLE — each gets their own private library.
-#   "|"  joins addresses belonging to the SAME person; the first one is the
+#   "|"  joins addresses belonging to the SAME person; the first is the
 #        identity their books are filed under, the rest are aliases for it.
-# So "you@example.com|you.alt@example.com, friend@example.com" is two people, one of whom
-# has two addresses. Forgetting a "|" gives separate libraries, never shared
-# ones. Edit and redeploy to change; it takes effect on the next request.
+# Forgetting a "|" gives separate libraries, never shared ones.
 # Origins allowed to call this API (comma-separated, no trailing slash).
 ALLOWED_ORIGINS = "https://rafsunsheikh.github.io,http://localhost:5173"
 # Google OAuth Web client ID (public value — safe to commit).
