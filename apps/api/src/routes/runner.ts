@@ -38,7 +38,7 @@ async function claimSummarize(c: RunnerCtx) {
   const job = await c.env.DB.prepare(
     `SELECT * FROM jobs WHERE status = 'queued' ORDER BY created_at ASC LIMIT 1`,
   ).first<JobRow>();
-  if (!job) return c.json({ job: null });
+  if (!job) return null;
 
   // Guard against two runners racing: only the one that flips the row wins.
   const claim = await c.env.DB.prepare(
@@ -48,7 +48,7 @@ async function claimSummarize(c: RunnerCtx) {
   )
     .bind(now, job.id)
     .run();
-  if (!claim.meta.changes) return c.json({ job: null });
+  if (!claim.meta.changes) return null;
 
   const book = await c.env.DB.prepare('SELECT * FROM books WHERE id = ?1')
     .bind(job.book_id)
@@ -59,7 +59,7 @@ async function claimSummarize(c: RunnerCtx) {
     )
       .bind(now, job.id)
       .run();
-    return c.json({ job: null });
+    return null;
   }
 
   const markdown = await getText(c.env, book.content_key);
@@ -69,11 +69,10 @@ async function claimSummarize(c: RunnerCtx) {
     )
       .bind(now, job.id)
       .run();
-    return c.json({ job: null });
+    return null;
   }
 
-  return c.json({
-    job: {
+  return {
       id: job.id,
       bookId: book.id,
       title: book.title,
@@ -81,8 +80,7 @@ async function claimSummarize(c: RunnerCtx) {
       wordCount: book.word_count,
       attempt: job.attempts + 1,
       markdown,
-    },
-  });
+  };
 }
 
 /**
@@ -113,13 +111,13 @@ async function claimQuestion(c: RunnerCtx) {
   const q = await c.env.DB.prepare(
     `SELECT * FROM questions WHERE status='queued' ORDER BY created_at ASC LIMIT 1`,
   ).first<QuestionRow>();
-  if (!q) return c.json({ question: null });
+  if (!q) return null;
 
   const claim = await c.env.DB.prepare(
     `UPDATE questions SET status='running', claimed_at=?1, attempts=attempts+1, error=NULL
       WHERE id=?2 AND status='queued'`,
   ).bind(now, q.id).run();
-  if (!claim.meta.changes) return c.json({ question: null });
+  if (!claim.meta.changes) return null;
 
   const book = await c.env.DB.prepare('SELECT * FROM books WHERE id = ?1')
     .bind(q.book_id)
@@ -129,7 +127,7 @@ async function claimQuestion(c: RunnerCtx) {
     await c.env.DB.prepare(
       `UPDATE questions SET status='failed', error='Book text is missing from storage', answered_at=?1 WHERE id=?2`,
     ).bind(now, q.id).run();
-    return c.json({ question: null });
+    return null;
   }
 
   // The summary is short and already paid for. Sending it alongside the
@@ -145,8 +143,7 @@ async function claimQuestion(c: RunnerCtx) {
       ORDER BY created_at DESC LIMIT 2`,
   ).bind(book.id, q.id).all<{ question: string; answer: string }>();
 
-  return c.json({
-    question: {
+  return {
       id: q.id,
       bookId: book.id,
       title: book.title,
@@ -156,8 +153,7 @@ async function claimQuestion(c: RunnerCtx) {
       markdown,
       summary,
       history: history.reverse(),
-    },
-  });
+  };
 }
 
 app.post('/ask/:id/complete', async (c) => {
@@ -207,7 +203,6 @@ app.post('/ask/:id/fail', async (c) => {
   ).bind(message, id).run();
   return c.json({ ok: true, requeued: retryable });
 });
-
 async function claimMindmap(c: RunnerCtx) {
   const now = Date.now();
 
