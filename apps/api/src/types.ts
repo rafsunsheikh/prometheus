@@ -98,3 +98,26 @@ export interface QuestionRow {
   claimed_at: number | null;
   answered_at: number | null;
 }
+
+export interface MindmapRow {
+  book_id: string;
+  owner_email: string;
+  tree: string | null;
+  status: QuestionStatus;
+  error: string | null;
+  attempts: number;
+  nodes: number;
+  model: string | null;
+  input_tokens: number;
+  output_tokens: number;
+  cost_usd: number;
+  created_at: number;
+  claimed_at: number | null;
+  built_at: number | null;
+}
+
+/** A node in a concept map. Depth is bounded when it is built, not here. */
+export interface MindmapNode {
+  label: string;
+  children?: MindmapNode[];
+}

@@ -31,6 +31,14 @@ export interface WaitingFor {
   total: number;
 }
 
+export interface MindmapState {
+  status: 'queued' | 'running' | 'done' | 'failed';
+  error: string | null;
+  nodes: number;
+  tree: import('./mindmap').MindmapNode | null;
+  builtAt: number | null;
+}
+
 export interface AdminStats {
   totals: {
     books: number; summarized: number; words: number; chars: number; pages: number;
@@ -209,6 +217,12 @@ export const api = {
     request<{ questions: Question[]; waitingFor: WaitingFor | null }>(
       `/api/books/${bookId}/questions`,
     ),
+
+  buildMindmap: (bookId: string) =>
+    request<{ queued: boolean }>(`/api/books/${bookId}/mindmap`, { method: 'POST' }),
+
+  getMindmap: (bookId: string) =>
+    request<{ mindmap: MindmapState | null }>(`/api/books/${bookId}/mindmap`),
 
   adminStats: () => request<AdminStats>('/api/admin/stats'),
 

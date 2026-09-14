@@ -68,10 +68,42 @@ export interface ClaimedQuestion {
   history: { question: string; answer: string }[];
 }
 
+export interface ClaimedMindmap {
+  bookId: string;
+  title: string;
+  author: string | null;
+  attempt: number;
+  summary: string;
+}
+
+/** Whatever the queue had next. One endpoint for every kind of work: polling
+ *  each kind separately would spend most of the request allowance asking. */
+export type NextWork =
+  | { kind: 'question'; question: ClaimedQuestion }
+  | { kind: 'mindmap'; mindmap: ClaimedMindmap }
+  | { kind: 'summarize'; job: ClaimedJob }
+  | { kind: null };
+
 export const api = {
-  claimQuestion: () =>
-    call<{ question: ClaimedQuestion | null }>('/api/runner/ask/claim', { method: 'POST' })
-      .then((r) => r.question),
+  next: () => call<NextWork>('/api/runner/next', { method: 'POST' }),
+
+  completeMindmap: (
+    bookId: string,
+    tree: unknown,
+    nodes: number,
+    model: string,
+    usage: { inputTokens: number; outputTokens: number; costUsd: number },
+  ) =>
+    call(`/api/runner/mindmap/${bookId}/complete`, {
+      method: 'POST',
+      body: JSON.stringify({ tree, nodes, model, usage }),
+    }),
+
+  failMindmap: (bookId: string, error: string, retry: boolean) =>
+    call<{ requeued: boolean }>(`/api/runner/mindmap/${bookId}/fail`, {
+      method: 'POST',
+      body: JSON.stringify({ error, retry }),
+    }),
 
   answerQuestion: (
     id: string,
@@ -90,9 +122,6 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ error, retry }),
     }),
-
-  claim: () =>
-    call<{ job: ClaimedJob | null }>('/api/runner/claim', { method: 'POST' }).then((r) => r.job),
 
   progress: (jobId: string, stage: string, done: number, total: number) =>
     call(`/api/runner/jobs/${jobId}/progress`, {

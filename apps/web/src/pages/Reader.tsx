@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
   MessageCircleQuestion,
+  Network,
   Check,
   ChevronDown,
   Copy,
@@ -15,6 +16,7 @@ import { api, type Book } from '../lib/api';
 import { renderMarkdown } from '../lib/markdown';
 import { exportDocx, exportMarkdown, exportPdf } from '../lib/export';
 import { Ask } from '../components/Ask';
+import { Mindmap } from '../components/Mindmap';
 import {
   ErrorNote,
   ProgressBar,
@@ -25,7 +27,7 @@ import {
   readingTime,
 } from '../components/Bits';
 
-type Tab = 'summary' | 'text' | 'ask';
+type Tab = 'summary' | 'text' | 'ask' | 'map';
 
 export function Reader() {
   const { id = '' } = useParams();
@@ -195,6 +197,10 @@ export function Reader() {
               <FileText className="h-3.5 w-3.5" />
               Full text
             </TabButton>
+            <TabButton active={tab === 'map'} onClick={() => setTab('map')}>
+              <Network className="h-3.5 w-3.5" />
+              Map
+            </TabButton>
             <TabButton active={tab === 'ask'} onClick={() => setTab('ask')}>
               <MessageCircleQuestion className="h-3.5 w-3.5" />
               Ask
@@ -207,7 +213,11 @@ export function Reader() {
             </div>
           )}
 
-          {tab !== 'ask' && (
+          {tab === 'map' && (
+            <Mindmap bookId={book.id} title={book.title} hasSummary={book.hasSummary} />
+          )}
+
+          {tab !== 'ask' && tab !== 'map' && (
           <article className="panel rise px-6 py-8 sm:px-10 sm:py-10">
             {tab === 'summary' && !summary && (
               <div className="grid place-items-center py-16 text-center">

@@ -3,7 +3,7 @@ import type { Context } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { requireUser } from '../lib/middleware';
 import { contentKey, countWords, deletePrefix, getText, newId, putText, readJson, summaryKey } from '../lib/storage';
-import type { BookRow, Env, JobRow, QuestionRow, SummaryRow, Variables } from '../types';
+import type { BookRow, Env, JobRow, MindmapRow, QuestionRow, SummaryRow, Variables } from '../types';
 
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
 app.use('*', requireUser);
@@ -248,10 +248,53 @@ app.get('/:id/questions', async (c) => {
   });
 });
 
+app.post('/:id/mindmap', async (c) => {
+  const book = await ownedBook(c, c.req.param('id'));
+
+  const summary = await c.env.DB.prepare('SELECT book_id FROM summaries WHERE book_id = ?1')
+    .bind(book.id)
+    .first();
+  if (!summary) {
+    throw new HTTPException(409, {
+      message: 'Summarize this book first — the map is built from its summary.',
+    });
+  }
+
+  const now = Date.now();
+  await c.env.DB.prepare(
+    `INSERT INTO mindmaps (book_id, owner_email, status, created_at)
+     VALUES (?1,?2,'queued',?3)
+     ON CONFLICT(book_id) DO UPDATE SET
+       status='queued', error=NULL, attempts=0, created_at=?3`,
+  )
+    .bind(book.id, c.get('user').email, now)
+    .run();
+
+  return c.json({ queued: true }, 202);
+});
+
+app.get('/:id/mindmap', async (c) => {
+  const book = await ownedBook(c, c.req.param('id'));
+  const m = await c.env.DB.prepare('SELECT * FROM mindmaps WHERE book_id = ?1')
+    .bind(book.id)
+    .first<MindmapRow>();
+  if (!m) return c.json({ mindmap: null });
+  return c.json({
+    mindmap: {
+      status: m.status,
+      error: m.error,
+      nodes: m.nodes,
+      tree: m.tree ? JSON.parse(m.tree) : null,
+      builtAt: m.built_at,
+    },
+  });
+});
+
 app.delete('/:id', async (c) => {
   const book = await ownedBook(c, c.req.param('id'));
   await deletePrefix(c.env, `books/${book.id}/`);
   await c.env.DB.batch([
+    c.env.DB.prepare('DELETE FROM mindmaps WHERE book_id = ?1').bind(book.id),
     c.env.DB.prepare('DELETE FROM questions WHERE book_id = ?1').bind(book.id),
     c.env.DB.prepare('DELETE FROM summaries WHERE book_id = ?1').bind(book.id),
     c.env.DB.prepare('DELETE FROM jobs WHERE book_id = ?1').bind(book.id),

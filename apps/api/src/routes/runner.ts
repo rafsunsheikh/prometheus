@@ -1,11 +1,14 @@
 import { Hono } from 'hono';
+import type { Context } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { requireRunner } from '../lib/middleware';
 import { countWords, getText, newId, putText, readJson, summaryKey } from '../lib/storage';
-import type { BookRow, Env, JobRow, QuestionRow, RunUsage, Variables } from '../types';
+import type { BookRow, Env, JobRow, MindmapRow, QuestionRow, RunUsage, Variables } from '../types';
 
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
 app.use('*', requireRunner);
+
+type RunnerCtx = Context<{ Bindings: Env; Variables: Variables }>;
 
 /** A job claimed but silent this long is assumed dead and returned to the queue. */
 const STALE_MS = 30 * 60 * 1000;
@@ -15,7 +18,7 @@ const MAX_ATTEMPTS = 3;
  * Claim the oldest queued job. The runner polls this; the Worker never reaches
  * out to the runner, so the machine running Claude needs no inbound port.
  */
-app.post('/claim', async (c) => {
+async function claimSummarize(c: RunnerCtx) {
   const now = Date.now();
 
   // Recycle jobs whose runner died mid-flight.
@@ -80,7 +83,7 @@ app.post('/claim', async (c) => {
       markdown,
     },
   });
-});
+}
 
 /**
  * Progress doubles as a heartbeat: it pushes `claimed_at` forward so a job that
@@ -95,7 +98,7 @@ app.post('/claim', async (c) => {
  * answer is not stuck behind books that have not started yet. A book already
  * running still finishes first — the runner makes one Claude call at a time.
  */
-app.post('/ask/claim', async (c) => {
+async function claimQuestion(c: RunnerCtx) {
   const now = Date.now();
 
   // Recycle questions whose runner died mid-answer.
@@ -155,7 +158,7 @@ app.post('/ask/claim', async (c) => {
       history: history.reverse(),
     },
   });
-});
+}
 
 app.post('/ask/:id/complete', async (c) => {
   const id = c.req.param('id');
@@ -202,6 +205,119 @@ app.post('/ask/:id/fail', async (c) => {
       ? `UPDATE questions SET status='queued', error=?1 WHERE id=?2`
       : `UPDATE questions SET status='failed', error=?1, answered_at=${Date.now()} WHERE id=?2`,
   ).bind(message, id).run();
+  return c.json({ ok: true, requeued: retryable });
+});
+
+async function claimMindmap(c: RunnerCtx) {
+  const now = Date.now();
+
+  await c.env.DB.prepare(
+    `UPDATE mindmaps SET status='queued' WHERE status='running' AND claimed_at < ?1 AND attempts < ?2`,
+  ).bind(now - STALE_MS, MAX_ATTEMPTS).run();
+
+  const m = await c.env.DB.prepare(
+    `SELECT * FROM mindmaps WHERE status='queued' ORDER BY created_at ASC LIMIT 1`,
+  ).first<MindmapRow>();
+  if (!m) return null;
+
+  const claim = await c.env.DB.prepare(
+    `UPDATE mindmaps SET status='running', claimed_at=?1, attempts=attempts+1, error=NULL
+      WHERE book_id=?2 AND status='queued'`,
+  ).bind(now, m.book_id).run();
+  if (!claim.meta.changes) return null;
+
+  const book = await c.env.DB.prepare('SELECT * FROM books WHERE id = ?1')
+    .bind(m.book_id)
+    .first<BookRow>();
+  // A map is built from the summary: it already distils the whole book into
+  // themes, where the opening pages of the raw text would only describe a
+  // title page. Without one there is nothing worth mapping.
+  const summary = book ? await getText(c.env, summaryKey(book.id)) : null;
+  if (!book || !summary) {
+    await c.env.DB.prepare(
+      `UPDATE mindmaps SET status='failed', error='This book has no summary to map yet', built_at=?1
+        WHERE book_id=?2`,
+    ).bind(now, m.book_id).run();
+    return null;
+  }
+
+  return {
+    bookId: book.id,
+    title: book.title,
+    author: book.author,
+    attempt: m.attempts + 1,
+    summary,
+  };
+}
+
+/**
+ * Hand the runner whatever work is next.
+ *
+ * One endpoint rather than one per kind: the runner polls every few seconds,
+ * and a separate poll per kind would spend most of the Workers request
+ * allowance on asking whether there is anything to do.
+ *
+ * Order is deliberate. Questions and maps are single, short calls, so they go
+ * ahead of summarization jobs that have not started — a reader waiting on an
+ * answer should not queue behind books nobody has begun. A book already
+ * running still finishes first; the runner makes one call at a time.
+ */
+app.post('/next', async (c) => {
+  const question = await claimQuestion(c);
+  if (question) return c.json({ kind: 'question', question });
+
+  const mindmap = await claimMindmap(c);
+  if (mindmap) return c.json({ kind: 'mindmap', mindmap });
+
+  const job = await claimSummarize(c);
+  if (job) return c.json({ kind: 'summarize', job });
+
+  return c.json({ kind: null });
+});
+
+app.post('/mindmap/:bookId/complete', async (c) => {
+  const bookId = c.req.param('bookId');
+  const body = await readJson<{ tree: unknown; nodes: number; model: string; usage: RunUsage }>(c.req);
+  if (!body.tree || typeof body.tree !== 'object') {
+    throw new HTTPException(400, { message: 'Tree is missing' });
+  }
+  const u: Partial<RunUsage> = body.usage ?? {};
+  const res = await c.env.DB.prepare(
+    `UPDATE mindmaps SET status='done', tree=?1, nodes=?2, model=?3,
+                         input_tokens=?4, output_tokens=?5, cost_usd=?6,
+                         built_at=?7, error=NULL
+      WHERE book_id=?8`,
+  )
+    .bind(
+      JSON.stringify(body.tree),
+      Math.max(0, Math.round(body.nodes ?? 0)),
+      body.model ?? null,
+      Math.max(0, Math.round(u.inputTokens ?? 0)),
+      Math.max(0, Math.round(u.outputTokens ?? 0)),
+      Math.max(0, u.costUsd ?? 0),
+      Date.now(),
+      bookId,
+    )
+    .run();
+  if (!res.meta.changes) throw new HTTPException(404, { message: 'No such map' });
+  return c.json({ ok: true });
+});
+
+app.post('/mindmap/:bookId/fail', async (c) => {
+  const bookId = c.req.param('bookId');
+  const body = await readJson<{ error: string; retry: boolean }>(c.req);
+  const m = await c.env.DB.prepare('SELECT * FROM mindmaps WHERE book_id = ?1')
+    .bind(bookId)
+    .first<MindmapRow>();
+  if (!m) throw new HTTPException(404, { message: 'No such map' });
+
+  const retryable = body.retry !== false && m.attempts < MAX_ATTEMPTS;
+  const message = (body.error ?? 'Could not build the map').slice(0, 2000);
+  await c.env.DB.prepare(
+    retryable
+      ? `UPDATE mindmaps SET status='queued', error=?1 WHERE book_id=?2`
+      : `UPDATE mindmaps SET status='failed', error=?1, built_at=${Date.now()} WHERE book_id=?2`,
+  ).bind(message, bookId).run();
   return c.json({ ok: true, requeued: retryable });
 });
 

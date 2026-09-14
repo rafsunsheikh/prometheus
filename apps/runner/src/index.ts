@@ -1,7 +1,9 @@
 import { api } from './api.js';
+import type { ClaimedJob, ClaimedMindmap, ClaimedQuestion } from './api.js';
 import { assertClaudeInstalled, config } from './config.js';
 import { summarizeBook } from './summarize.js';
 import { answerQuestion } from './ask.js';
+import { buildMindmap } from './mindmap.js';
 
 const once = process.argv.includes('--once');
 let stopping = false;
@@ -10,10 +12,7 @@ const stamp = () => new Date().toISOString().slice(11, 19);
 const log = (msg: string) => console.log(`[${stamp()}] ${msg}`);
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
-async function handleOneJob(): Promise<boolean> {
-  const job = await api.claim();
-  if (!job) return false;
-
+async function runSummarize(job: ClaimedJob): Promise<void> {
   const words = job.wordCount.toLocaleString();
   log(`Claimed ${job.id} — "${job.title}" (${words} words, attempt ${job.attempt})`);
   const startedAt = Date.now();
@@ -51,7 +50,6 @@ async function handleOneJob(): Promise<boolean> {
     log(`FAILED ${job.id}: ${message}`);
     await api.fail(job.id, message, true).catch(() => {});
   }
-  return true;
 }
 
 /**
@@ -61,10 +59,7 @@ async function handleOneJob(): Promise<boolean> {
  * books that have not started. A book already running still finishes first —
  * this runner makes one Claude call at a time, deliberately.
  */
-async function handleOneQuestion(): Promise<boolean> {
-  const q = await api.claimQuestion();
-  if (!q) return false;
-
+async function runQuestion(q: ClaimedQuestion): Promise<void> {
   log(`Question on "${q.title}" (attempt ${q.attempt}): ${q.question.slice(0, 80)}`);
   const startedAt = Date.now();
 
@@ -93,7 +88,46 @@ async function handleOneQuestion(): Promise<boolean> {
     log(`  FAILED: ${message}`);
     await api.failQuestion(q.id, message, true).catch(() => {});
   }
-  return true;
+}
+
+async function runMindmap(m: ClaimedMindmap): Promise<void> {
+  log(`Concept map for "${m.title}" (attempt ${m.attempt})`);
+  const startedAt = Date.now();
+  try {
+    const result = await buildMindmap({ title: m.title, author: m.author, summary: m.summary });
+    await api.completeMindmap(m.bookId, result.tree, result.nodes, result.model, {
+      inputTokens: result.inputTokens,
+      outputTokens: result.outputTokens,
+      costUsd: result.costUsd,
+    });
+    log(
+      `  built in ${((Date.now() - startedAt) / 1000).toFixed(0)}s — ${result.nodes} nodes, ` +
+        `${(result.inputTokens + result.outputTokens).toLocaleString()} tokens, ` +
+        `~$${result.costUsd.toFixed(2)}`,
+    );
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    log(`  FAILED: ${message}`);
+    await api.failMindmap(m.bookId, message, true).catch(() => {});
+  }
+}
+
+/** Take one piece of work of any kind. Returns false when the queue is empty. */
+async function handleNext(): Promise<boolean> {
+  const work = await api.next();
+  switch (work.kind) {
+    case 'question':
+      await runQuestion(work.question);
+      return true;
+    case 'mindmap':
+      await runMindmap(work.mindmap);
+      return true;
+    case 'summarize':
+      await runSummarize(work.job);
+      return true;
+    default:
+      return false;
+  }
 }
 
 async function main(): Promise<void> {
@@ -113,8 +147,8 @@ async function main(): Promise<void> {
   }
 
   if (once) {
-    const worked = (await handleOneQuestion()) || (await handleOneJob());
-    log(worked ? 'Processed one job, exiting (--once)' : 'Queue empty, exiting (--once)');
+    const worked = await handleNext();
+    log(worked ? 'Processed one item, exiting (--once)' : 'Queue empty, exiting (--once)');
     return;
   }
 
@@ -123,7 +157,7 @@ async function main(): Promise<void> {
 
   while (!stopping) {
     try {
-      const worked = (await handleOneQuestion()) || (await handleOneJob());
+      const worked = await handleNext();
       if (worked) {
         idleLogged = false;
         continue; // Drain the queue before sleeping again.
