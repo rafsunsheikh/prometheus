@@ -3,6 +3,9 @@ main = "src/index.ts"
 compatibility_date = "2026-09-01"
 compatibility_flags = ["nodejs_compat"]
 
+# Publish to <name>.<subdomain>.workers.dev — no custom domain needed.
+workers_dev = true
+
 # Static vars (non-secret). Secrets go via `wrangler secret put`.
 [vars]
 # NOTE: ALLOWED_EMAILS is a SECRET, not a var — it holds real email addresses
@@ -15,7 +18,7 @@ compatibility_flags = ["nodejs_compat"]
 # Origins allowed to call this API (comma-separated, no trailing slash).
 ALLOWED_ORIGINS = "https://rafsunsheikh.github.io,http://localhost:5173"
 # Google OAuth Web client ID (public value — safe to commit).
-GOOGLE_CLIENT_ID = ""
+GOOGLE_CLIENT_ID = "191342466011-gs3hccd0kd9l94e5qs0skohk7hcqvk5u.apps.googleusercontent.com"
 
 [[d1_databases]]
 binding = "DB"
