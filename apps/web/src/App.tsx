@@ -25,6 +25,7 @@ function Routed() {
       <Routes>
         <Route path="/" element={<Library />} />
         <Route path="/book/:id" element={<Reader />} />
+        <Route path="/book/:id/:tab" element={<Reader />} />
         {/* Rendered for everyone who asks; the API refuses non-admins, so the
             page simply shows that refusal rather than pretending to be secret. */}
         <Route path="/admin" element={<Admin />} />

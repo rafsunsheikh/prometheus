@@ -12,6 +12,8 @@ export interface Placed {
   h: number;
   lines: string[];
   parent: Placed | null;
+  /** Which way this node runs from the root: 1 right, -1 left. */
+  dir: 1 | -1;
 }
 
 /* Layout is deliberately arithmetic rather than a library: the tree is bounded
@@ -19,8 +21,8 @@ export interface Placed {
    cleverer, and drawing it ourselves keeps the whole feature dependency-free
    and exportable as a single SVG file. */
 
-const COL_W = [230, 210, 200, 190];
-const COL_GAP = 46;
+const COL_W = [215, 198, 190, 184];
+const COL_GAP = 38;
 const LINE_H = 17;
 const PAD_Y = 11;
 const V_GAP = 12;
@@ -55,50 +57,105 @@ export interface Layout {
 }
 
 /**
- * Place every node. Children stack vertically; a parent centres on the block
- * its children occupy, so the map reads as a tree rather than a list.
+ * Lay the map out with the root in the middle and its branches running both
+ * ways, as a mind map actually looks.
+ *
+ * A single left-to-right tree was the obvious first attempt and read badly:
+ * seven themes made it twice as tall as the screen, and centring the root on
+ * that span pushed the book's central idea — the one node that should be seen
+ * first — below the fold behind an empty column. Splitting the branches halves
+ * the height and puts the root where the eye starts.
  */
 export function layout(root: MindmapNode): Layout {
   const nodes: Placed[] = [];
-  let cursorY = 0;
+  const kids = root.children ?? [];
 
-  const place = (node: MindmapNode, depth: number, parent: Placed | null): Placed => {
+  // Bias the extra branch to the right, where reading starts.
+  const half = Math.ceil(kids.length / 2);
+  const sides: [MindmapNode[], 1 | -1][] = [
+    [kids.slice(0, half), 1],
+    [kids.slice(half), -1],
+  ];
+
+  const rootW = colW(0);
+  let cursorY = 0;
+  const sideSpans: { top: number; bottom: number }[] = [];
+
+  const place = (node: MindmapNode, depth: number, dir: 1 | -1, parent: Placed | null): Placed => {
     const lines = wrap(node.label, perLine(depth));
     const h = lines.length * LINE_H + PAD_Y * 2;
     const w = colW(depth);
-    const x = COL_W.slice(0, depth).reduce((n, v) => n + v + COL_GAP, 0);
 
-    const placed: Placed = { label: node.label, depth, x, y: 0, w, h, lines, parent };
+    // Distance from the root's edge out to this column.
+    const offset = COL_W.slice(1, depth).reduce((n, v) => n + v + COL_GAP, 0) + COL_GAP;
+    const x = dir === 1 ? rootW + offset : -(offset + w);
+
+    const placed: Placed = { label: node.label, depth, x, y: 0, w, h, lines, parent, dir };
     nodes.push(placed);
 
-    const kids = node.children ?? [];
-    if (kids.length === 0) {
+    const children = node.children ?? [];
+    if (children.length === 0) {
       placed.y = cursorY;
       cursorY += h + V_GAP;
       return placed;
     }
-
-    const children = kids.map((k) => place(k, depth + 1, placed));
-    const first = children[0]!;
-    const last = children[children.length - 1]!;
-    // Centre on the span of the children, then nudge back inside the canvas if
-    // a tall subtree would push a short parent above the top edge.
-    placed.y = Math.max(0, (first.y + last.y + last.h - h) / 2);
+    const laid = children.map((k) => place(k, depth + 1, dir, placed));
+    const first = laid[0]!;
+    const last = laid[laid.length - 1]!;
+    placed.y = (first.y + last.y + last.h - h) / 2;
     return placed;
   };
 
-  place(root, 0, null);
+  for (const [branch, dir] of sides) {
+    if (branch.length === 0) continue;
+    // Each half flows from the top independently: sharing one cursor stacked
+    // the left branches below the right ones instead of mirroring them, which
+    // left their whole column empty.
+    cursorY = 0;
+    for (const k of branch) place(k, 1, dir, null);
+    sideSpans.push({ top: 0, bottom: cursorY });
+  }
 
-  const width = Math.max(...nodes.map((n) => n.x + n.w)) + 8;
-  const height = Math.max(...nodes.map((n) => n.y + n.h)) + 8;
-  return { nodes, width, height };
+  // The root sits at the middle of everything, and each branch points back to it.
+  const rootLines = wrap(root.label, perLine(0));
+  const rootH = rootLines.length * LINE_H + PAD_Y * 2;
+  const spanTop = Math.min(...sideSpans.map((s) => s.top), 0);
+  const spanBottom = Math.max(...sideSpans.map((s) => s.bottom), rootH);
+  const rootNode: Placed = {
+    label: root.label,
+    depth: 0,
+    x: 0,
+    y: (spanTop + spanBottom - rootH) / 2,
+    w: rootW,
+    h: rootH,
+    lines: rootLines,
+    parent: null,
+    dir: 1,
+  };
+  nodes.unshift(rootNode);
+  for (const n of nodes) if (n.depth === 1) n.parent = rootNode;
+
+  // Shift everything positive: the left half was laid out at negative x.
+  const minX = Math.min(...nodes.map((n) => n.x));
+  const minY = Math.min(...nodes.map((n) => n.y));
+  for (const n of nodes) {
+    n.x += -minX + 6;
+    n.y += -minY + 6;
+  }
+
+  return {
+    nodes,
+    width: Math.max(...nodes.map((n) => n.x + n.w)) + 6,
+    height: Math.max(...nodes.map((n) => n.y + n.h)) + 6,
+  };
 }
 
-/** A curve from a parent's right edge to a child's left edge. */
+/** A curve from a parent to a child, leaving whichever edge faces the child. */
 export function edgePath(parent: Placed, child: Placed): string {
-  const x1 = parent.x + parent.w;
+  const out = child.dir === 1;
+  const x1 = out ? parent.x + parent.w : parent.x;
+  const x2 = out ? child.x : child.x + child.w;
   const y1 = parent.y + parent.h / 2;
-  const x2 = child.x;
   const y2 = child.y + child.h / 2;
   const mid = x1 + (x2 - x1) / 2;
   return `M${x1},${y1} C${mid},${y1} ${mid},${y2} ${x2},${y2}`;

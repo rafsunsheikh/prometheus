@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
   MessageCircleQuestion,
@@ -30,11 +30,18 @@ import {
 type Tab = 'summary' | 'text' | 'ask' | 'map';
 
 export function Reader() {
-  const { id = '' } = useParams();
+  const { id = '', tab: tabParam } = useParams();
+  const navigate = useNavigate();
   const [book, setBook] = useState<Book | null>(null);
   const [summary, setSummary] = useState<string | null>(null);
   const [content, setContent] = useState<string | null>(null);
-  const [tab, setTab] = useState<Tab>('summary');
+  // The tab lives in the URL so a view can be linked, bookmarked and reloaded
+  // into — a map or a conversation is worth pointing someone at.
+  const tab: Tab = (['summary', 'text', 'ask', 'map'] as const).includes(tabParam as Tab)
+    ? (tabParam as Tab)
+    : 'summary';
+  const setTab = (t: Tab) =>
+    navigate(t === 'summary' ? `/book/${id}` : `/book/${id}/${t}`, { replace: true });
   const [error, setError] = useState<string | null>(null);
   const [loadingText, setLoadingText] = useState(false);
   const [requeueing, setRequeueing] = useState(false);
