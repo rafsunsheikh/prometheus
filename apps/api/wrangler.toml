@@ -20,7 +20,7 @@ GOOGLE_CLIENT_ID = ""
 [[d1_databases]]
 binding = "DB"
 database_name = "prometheus-db"
-database_id = "REPLACE_WITH_D1_DATABASE_ID"
+database_id = "339194bb-6a8a-4656-b7c2-86e36887ad51"
 migrations_dir = "migrations"
 
 [[r2_buckets]]
