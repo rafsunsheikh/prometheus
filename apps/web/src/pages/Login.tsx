@@ -90,7 +90,7 @@ export function Login() {
                  backdrop, which shows as a pale rectangle behind the pill.
                  Clipping to the same rounded shape hides the corners the
                  iframe leaves behind. */
-              <div className="overflow-hidden rounded-full leading-[0]">
+              <div className="flex overflow-hidden rounded-full">
                 <div ref={buttonRef} />
               </div>
             )}
